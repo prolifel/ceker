@@ -1,5 +1,7 @@
 'use server'
 
+import { getDomains } from "@/lib/domain"
+
 interface CheckResult {
   isLegitimate: boolean
   message: string
@@ -62,10 +64,10 @@ export async function checkWebsiteLegitimacy(
 
   // Check 3: HTTPS verification
   if (url.protocol === 'https:') {
-    details.push('✓ Uses secure HTTPS connection')
+    details.push('✓ Uses secure connection')
   } else {
     suspicionScore += 3
-    details.push('⚠️ Does not use HTTPS encryption')
+    details.push('⚠️ Does not use encryption')
   }
 
   // Check 4: Try to fetch the website
@@ -87,7 +89,7 @@ export async function checkWebsiteLegitimacy(
   } catch (error) {
     if (url.protocol === 'https:') {
       suspicionScore += 2
-      details.push('⚠️ Website cannot be reached or has SSL issues')
+      details.push('⚠️ Website cannot be reached')
     } else {
       suspicionScore += 1
       details.push('⚠️ Website could not be reached')
@@ -112,6 +114,16 @@ export async function checkWebsiteLegitimacy(
   } else {
     details.push('✓ Uses proper domain name')
   }
+
+  // Check 7: Check for internal list
+  const data = await getDomains(hostname)
+  if (data === null) {
+    suspicionScore += 1
+    details.push('⚠️ Website is not available in our legitimate website list')
+  } else {
+    details.push('✓ Website is available in our legitimate website list')
+  }
+
 
   // Determine legitimacy based on suspicion score
   const isLegitimate = suspicionScore < 3

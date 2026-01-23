@@ -100,11 +100,10 @@ export default function Home() {
 
           {result && (
             <div
-              className={`mt-6 p-4 rounded-lg border-2 ${
-                result.isLegitimate
+              className={`mt-6 p-4 rounded-lg border-2 ${result.isLegitimate
                   ? 'bg-green-50 border-green-200'
                   : 'bg-red-50 border-red-200'
-              }`}
+                }`}
             >
               <div className="flex items-start gap-3">
                 {result.isLegitimate ? (
@@ -114,20 +113,18 @@ export default function Home() {
                 )}
                 <div className="flex-1">
                   <h3
-                    className={`font-semibold mb-1 ${
-                      result.isLegitimate
+                    className={`font-semibold mb-1 ${result.isLegitimate
                         ? 'text-green-900'
                         : 'text-red-900'
-                    }`}
+                      }`}
                   >
                     {result.message}
                   </h3>
                   <ul
-                    className={`text-sm space-y-1 ${
-                      result.isLegitimate
+                    className={`text-sm space-y-1 ${result.isLegitimate
                         ? 'text-green-800'
                         : 'text-red-800'
-                    }`}
+                      }`}
                   >
                     {result.details.map((detail, idx) => (
                       <li key={idx}>• {detail}</li>
@@ -138,10 +135,6 @@ export default function Home() {
             </div>
           )}
         </Card>
-
-        <p className="text-center text-sm text-slate-600 mt-6">
-          This checker uses multiple security indicators to assess website legitimacy
-        </p>
       </div>
     </main>
   )
