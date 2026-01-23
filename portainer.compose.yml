@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ceker_db
+      MYSQL_USER: ceker_user
+      MYSQL_PASSWORD: ceker_pass
+    ports:
+      - "3306:3306"
+    networks:
+      - ceker-net
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ceker:
+    image: cr.prolifel.com/ceker:latest
+    ports:
+      - "3000:3000"
+    networks:
+      - ceker-net
+      - nginx_proxy
+    environment:
+      - DATABASE_URL=mysql://ceker_user:ceker_pass@ceker-mysql-1:3306/ceker_db
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+networks:
+  ceker-net:
+  nginx_proxy:
+      external: true

@@ -40,10 +40,9 @@ COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/prisma ./prisma
 # Copy the custom generated Prisma client location
 COPY --from=build /app/generated ./generated
-# Copy prisma.config.ts for Prisma CLI commands
-COPY --from=build /app/prisma.config.ts ./prisma.config.ts
+# No need to copy Prisma CLI - will use npx at runtime
 
 EXPOSE 3000
 
-# Start the server
-CMD ["node", "server.js"]
+# Wait for database, run Prisma migrations using npx, then start the server
+CMD ["sh", "-c", "sleep 5 && npx -y prisma@6 migrate deploy && node server.js"]
