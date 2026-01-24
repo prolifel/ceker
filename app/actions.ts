@@ -1,6 +1,6 @@
 'use server'
 
-import { getDomains } from "@/lib/domain"
+import { getDomainByDomain } from "@/lib/repo/domain"
 
 interface CheckResult {
   isLegitimate: boolean
@@ -116,8 +116,8 @@ export async function checkWebsiteLegitimacy(
   }
 
   // Check 7: Check for internal list
-  const data = await getDomains(hostname)
-  if (data === null) {
+  const data = await getDomainByDomain(hostname)
+  if (data == null) {
     suspicionScore += 1
     details.push('⚠️ Website is not available in our legitimate website list')
   } else {
