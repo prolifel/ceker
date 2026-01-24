@@ -4,7 +4,7 @@ services:
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: ceker_db
+      MYSQL_DATABASE: ceker
       MYSQL_USER: ceker_user
       MYSQL_PASSWORD: ceker_pass
     ports:
@@ -27,7 +27,11 @@ services:
       - ceker-net
       - nginx_proxy
     environment:
-      - DATABASE_URL=mysql://ceker_user:ceker_pass@ceker-mysql-1:3306/ceker_db
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
     depends_on:
       mysql:
         condition: service_healthy
