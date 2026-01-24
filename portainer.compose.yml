@@ -32,6 +32,7 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_DATABASE=${DB_DATABASE}
+      - BROWSERLESS_API_TOKEN=${BROWSERLESS_API_TOKEN}
     depends_on:
       mysql:
         condition: service_healthy

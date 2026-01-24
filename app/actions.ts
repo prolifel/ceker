@@ -1,11 +1,13 @@
 'use server'
 
+import { captureScreenshot } from "@/lib/browserless"
 import { getDomainByDomain } from "@/lib/repo/domain"
 
 interface CheckResult {
   isLegitimate: boolean
   message: string
   details: string[]
+  screenshot?: string
 }
 
 export async function checkWebsiteLegitimacy(
@@ -126,7 +128,10 @@ export async function checkWebsiteLegitimacy(
 
 
   // Determine legitimacy based on suspicion score
-  const isLegitimate = suspicionScore < 3
+  const isLegitimate = suspicionScore < 4
+
+  // Capture screenshot
+  const screenshot = await captureScreenshot(url.toString())
 
   return {
     isLegitimate,
@@ -134,5 +139,6 @@ export async function checkWebsiteLegitimacy(
       ? '✓ Appears to be a Legitimate Website'
       : '⚠️ Website Shows Suspicious Signs',
     details,
+    screenshot: screenshot || undefined,
   }
 }

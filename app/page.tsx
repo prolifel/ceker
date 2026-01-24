@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { checkWebsiteLegitimacy } from './actions'
+import { ScreenshotDisplay } from '@/components/screenshot-display'
 
 interface Result {
   isLegitimate: boolean
   message: string
   details: string[]
+  screenshot?: string
 }
 
 export default function Home() {
@@ -98,11 +100,18 @@ export default function Home() {
             </div>
           )}
 
+          {result && result.screenshot && (
+            <div className="mt-6 space-y-2">
+              <h4 className="text-sm font-medium text-slate-700">Website Screenshot</h4>
+              <ScreenshotDisplay screenshot={result.screenshot} alt="Website screenshot" />
+            </div>
+          )}
+
           {result && (
             <div
               className={`mt-6 p-4 rounded-lg border-2 ${result.isLegitimate
-                  ? 'bg-green-50 border-green-200'
-                  : 'bg-red-50 border-red-200'
+                ? 'bg-green-50 border-green-200'
+                : 'bg-red-50 border-red-200'
                 }`}
             >
               <div className="flex items-start gap-3">
@@ -114,16 +123,16 @@ export default function Home() {
                 <div className="flex-1">
                   <h3
                     className={`font-semibold mb-1 ${result.isLegitimate
-                        ? 'text-green-900'
-                        : 'text-red-900'
+                      ? 'text-green-900'
+                      : 'text-red-900'
                       }`}
                   >
                     {result.message}
                   </h3>
                   <ul
                     className={`text-sm space-y-1 ${result.isLegitimate
-                        ? 'text-green-800'
-                        : 'text-red-800'
+                      ? 'text-green-800'
+                      : 'text-red-800'
                       }`}
                   >
                     {result.details.map((detail, idx) => (
