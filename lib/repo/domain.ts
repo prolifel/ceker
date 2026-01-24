@@ -10,6 +10,15 @@ export interface Domain {
     id: number
 }
 
+export type CreateDomainResult =
+    | { ok: true; data: Domain }
+    | { ok: false; error: 'DUPLICATE_DOMAIN' | 'UNKNOWN_ERROR' };
+
+interface MySQLError extends Error {
+    code?: string;
+    sqlMessage?: string;
+}
+
 export async function getDomainByDomain(query: string): Promise<Domain | null> {
     try {
         const [rows] = await pool.query<DomainRow[]>(
@@ -37,7 +46,7 @@ export async function getAllDomains(): Promise<Domain[]> {
     }
 }
 
-export async function createDomain(domainName: string): Promise<Domain | null> {
+export async function createDomain(domainName: string): Promise<CreateDomainResult> {
     try {
         const [res] = await pool.execute<ResultSetHeader>(
             `insert into domains(domain) values (?)`,
@@ -45,11 +54,19 @@ export async function createDomain(domainName: string): Promise<Domain | null> {
         )
 
         return {
-            id: res.insertId,
-            domain: domainName
+            ok: true,
+            data: {
+                id: res.insertId,
+                domain: domainName
+            }
         }
     } catch (error) {
+        const err = error as MySQLError
+        if (err.code === 'ER_DUP_ENTRY') {
+            return { ok: false, error: "DUPLICATE_DOMAIN" }
+        }
+
         console.error(error)
-        return null
+        return { ok: false, error: "UNKNOWN_ERROR" }
     }
 }

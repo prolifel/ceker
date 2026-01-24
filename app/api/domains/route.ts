@@ -21,13 +21,47 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
-        const json = await request.json()
-        const domain = await createDomain(json.domain)
-        return NextResponse.json(domain)
+        const req = await request.json()
+        if ("domain" in req) {
+            const res = await createDomain(req.domain)
+            if (!res.ok) {
+                if (res.error == "DUPLICATE_DOMAIN") {
+                    return NextResponse.json({
+                        message: "domain already exist",
+                        data: null
+                    }, {
+                        status: 400
+                    })
+                }
+
+                return NextResponse.json({
+                    message: "internal server error",
+                    data: null
+                }, {
+                    status: 500
+                })
+            }
+
+            return NextResponse.json({
+                message: "success",
+                data: res.data
+            }, {
+                status: 201
+            })
+        }
+
+        return NextResponse.json({
+            message: "bad request, domain is required",
+            data: null
+        }, {
+            status: 400
+        })
+
     } catch (error: any) {
         console.error(error)
         return NextResponse.json({
-            message: "Internal server error"
+            message: "Internal server error",
+            data: null
         }, {
             status: 500
         })
