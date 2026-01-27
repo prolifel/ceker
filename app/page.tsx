@@ -6,9 +6,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
-import { checkWebsiteLegitimacy } from './actions'
+import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { ScreenshotDisplay } from '@/components/screenshot-display'
+import { ProgressBar } from '@/components/progress-bar'
 
 interface Result {
   isLegitimate: boolean
@@ -22,11 +22,15 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState(0)
+  const [progressMessage, setProgressMessage] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setResult(null)
+    setProgress(0)
+    setProgressMessage('')
 
     if (!url.trim()) {
       setError('Please enter a URL')
@@ -34,14 +38,66 @@ export default function Home() {
     }
 
     setLoading(true)
+    setProgress(0)
+    setProgressMessage('Starting scan...')
+
     try {
-      const checkResult = await checkWebsiteLegitimacy(url)
-      setResult(checkResult)
+      const response = await fetch('/api/check-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to check website')
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(6)
+            if (!jsonStr.trim()) continue
+
+            try {
+              const data = JSON.parse(jsonStr)
+              if (data.error) {
+                throw new Error(data.message || 'Scan failed')
+              }
+              if (data.percent !== undefined) {
+                setProgress(data.percent)
+                if (data.message) {
+                  setProgressMessage(data.message)
+                }
+              }
+              if (data.result) {
+                setResult(data.result)
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+            }
+          }
+        }
+      }
     } catch (err) {
       setError('Failed to check website. Please try again.')
       console.error(err)
     } finally {
       setLoading(false)
+      setProgress(0)
+      setProgressMessage('')
     }
   }
 
@@ -82,15 +138,14 @@ export default function Home() {
               disabled={loading}
               className="w-full"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Checking...
-                </>
-              ) : (
-                'Check Website'
-              )}
+              {loading ? 'Checking...' : 'Check Website'}
             </Button>
+
+            {loading && progress > 0 && (
+              <div className="mt-4">
+                <ProgressBar percent={progress} message={progressMessage} />
+              </div>
+            )}
           </form>
 
           {error && (

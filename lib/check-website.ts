@@ -1,18 +1,19 @@
-'use server'
-
 import { captureScreenshot } from "@/lib/external/browserless"
 import { getDomainByDomain } from "@/lib/repo/domain"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
 
-interface CheckResult {
+export interface CheckResult {
   isLegitimate: boolean
   message: string
   details: string[]
   screenshot?: string
 }
 
+type ProgressCallback = (percent: number, message: string) => void
+
 export async function checkWebsiteLegitimacy(
-  urlString: string
+  urlString: string,
+  onProgress?: ProgressCallback
 ): Promise<CheckResult> {
   const details: string[] = []
 
@@ -23,6 +24,7 @@ export async function checkWebsiteLegitimacy(
       ? urlString
       : `https://${urlString}`
     url = new URL(normalizedUrl)
+    onProgress?.(10, 'URL validated')
   } catch {
     return {
       isLegitimate: false,
@@ -33,13 +35,14 @@ export async function checkWebsiteLegitimacy(
 
   // Check for common phishing indicators
   const hostname = url.hostname.toLowerCase()
-  console.log(url.toString());
 
   let suspicionScore = 0
 
-  // Cloudflare radar check
+  // URL Scanner check
+  onProgress?.(20, 'Scanning with URL Scanner...')
   try {
     const cloudflareRadarResult = await checkCloudflareRadar(url.toString())
+    onProgress?.(50, 'URL Scanner scan complete')
     if (!cloudflareRadarResult.safe) {
       suspicionScore += 5
       details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
@@ -47,6 +50,7 @@ export async function checkWebsiteLegitimacy(
       details.push(`✓ Passed URL Scanner check`)
     }
   } catch (error) {
+    onProgress?.(50, 'URL Scanner scan complete')
     console.error('URL Scanner check failed:', error)
     details.push(`ℹ️ URL Scanner check unavailable`)
   }
@@ -120,7 +124,6 @@ export async function checkWebsiteLegitimacy(
   }
 
   // Check 5: Domain age consideration (basic heuristic)
-  // In a real scenario, you'd use a WHOIS API
   if (hostname.split('.').length > 3) {
     suspicionScore += 1
     details.push('⚠️ Domain structure seems unusual (subdomain heavy)')
@@ -135,6 +138,7 @@ export async function checkWebsiteLegitimacy(
   }
 
   // Check 7: Check for internal list
+  onProgress?.(70, 'Checking domain database...')
   const data = await getDomainByDomain(hostname)
   if (data == null) {
     suspicionScore += 1
@@ -143,12 +147,14 @@ export async function checkWebsiteLegitimacy(
     details.push('✓ Website is available in our legitimate website list')
   }
 
-
   // Determine legitimacy based on suspicion score
   const isLegitimate = suspicionScore < 4
 
   // Capture screenshot
+  onProgress?.(80, 'Capturing screenshot...')
   const screenshot = await captureScreenshot(url.toString())
+
+  onProgress?.(100, 'Complete')
 
   return {
     isLegitimate,
