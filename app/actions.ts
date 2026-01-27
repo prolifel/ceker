@@ -1,7 +1,8 @@
 'use server'
 
-import { captureScreenshot } from "@/lib/browserless"
+import { captureScreenshot } from "@/lib/external/browserless"
 import { getDomainByDomain } from "@/lib/repo/domain"
+import { checkCloudflareRadar } from "@/lib/external/cloudflare"
 
 interface CheckResult {
   isLegitimate: boolean
@@ -32,7 +33,23 @@ export async function checkWebsiteLegitimacy(
 
   // Check for common phishing indicators
   const hostname = url.hostname.toLowerCase()
+  console.log(url.toString());
+
   let suspicionScore = 0
+
+  // Cloudflare radar check
+  try {
+    const cloudflareRadarResult = await checkCloudflareRadar(url.toString())
+    if (!cloudflareRadarResult.safe) {
+      suspicionScore += 5
+      details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
+    } else {
+      details.push(`✓ Passed URL Scanner check`)
+    }
+  } catch (error) {
+    console.error('URL Scanner check failed:', error)
+    details.push(`ℹ️ URL Scanner check unavailable`)
+  }
 
   // Check 1: Suspicious TLDs
   const suspiciousTLDs = ['.tk', '.ml', '.ga', '.cf']
