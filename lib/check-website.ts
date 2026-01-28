@@ -1,8 +1,9 @@
 import { getDomainByDomain } from "@/lib/repo/domain"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
-import { getOrFetchScreenshot } from "@/lib/services/screenshot"
 import { sha256 } from "./shared/hash"
-import { addHashWithVerdict } from "@/lib/repo/safebrowsing-cache"
+import { addHashToGlobalCache, addHashWithVerdict, getCacheEntry, updateScreenshotPath, updateVerdict } from "@/lib/repo/safebrowsing-cache"
+import { captureScreenshot } from "./external/browserless"
+import { saveScreenshot } from "./shared/storage"
 
 export interface CheckResult {
   isLegitimate: boolean
@@ -43,29 +44,58 @@ export async function checkWebsiteLegitimacy(
 
   const hash = await sha256(url.toString())
 
+  // Check cache first
+  const cacheEntry = await getCacheEntry(hash)
+  const isCacheValid = cacheEntry && cacheEntry?.verdict != 'UNKNOWN' && (cacheEntry.expires_at && new Date() < cacheEntry.expires_at)
+
   let suspicionScore = 0
 
   // URL Scanner check
   onProgress?.(20, 'Scanning with URL Scanner...')
-  let verdict = 'UNKNOWN'
-  try {
-    const cloudflareRadarResult = await checkCloudflareRadar(url.toString(), hash)
-    onProgress?.(50, 'URL Scanner scan complete')
+  if (isCacheValid) {
+    console.log(`[Cloudflare Radar][${url.toString()}] Cache is valid`);
 
-    verdict = cloudflareRadarResult.verdict || 'UNKNOWN'
-    await addHashWithVerdict(hash, verdict)
-
-    if (!cloudflareRadarResult.safe) {
+    if (cacheEntry?.verdict == 'MALICIOUS' || cacheEntry?.verdict == 'PHISHING') {
       suspicionScore += 5
-      details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
-    } else {
+      details.push(`⚠️ URL Scanner detected threats: ${cacheEntry?.verdict}.`)
+    } else if (cacheEntry?.verdict == 'SAFE') {
       details.push(`✓ Passed URL Scanner check`)
+    } else {
+      details.push(`⚠️ URL Scanner not available`)
     }
-  } catch (error) {
+
     onProgress?.(50, 'URL Scanner scan complete')
-    console.error('URL Scanner check failed:', error)
-    details.push(`ℹ️ URL Scanner check unavailable`)
-    await addHashWithVerdict(hash, 'UNKNOWN')
+  } else {
+    console.log(`[Cloudflare Radar][${url.toString()}] Cache is not valid`);
+
+    let verdict = 'UNKNOWN'
+    try {
+      const cloudflareRadarResult = await checkCloudflareRadar(url.toString(), hash)
+      onProgress?.(50, 'URL Scanner scan complete')
+
+      verdict = cloudflareRadarResult.verdict || 'UNKNOWN'
+      if (cacheEntry) {
+        await updateVerdict(hash, verdict)
+      } else {
+        await addHashWithVerdict(hash, verdict)
+      }
+
+      if (!cloudflareRadarResult.safe) {
+        suspicionScore += 5
+        details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
+      } else {
+        details.push(`✓ Passed URL Scanner check`)
+      }
+    } catch (error) {
+      onProgress?.(50, 'URL Scanner scan complete')
+      console.error('URL Scanner check failed:', error)
+      details.push(`ℹ️ URL Scanner check unavailable`)
+      if (cacheEntry) {
+        await updateVerdict(hash, verdict)
+      } else {
+        await addHashWithVerdict(hash, verdict)
+      }
+    }
   }
 
   // Check 1: Suspicious TLDs
@@ -165,7 +195,24 @@ export async function checkWebsiteLegitimacy(
 
   // Capture screenshot (with caching)
   onProgress?.(80, 'Capturing screenshot...')
-  const screenshotPath = await getOrFetchScreenshot(url.toString(), hash) || undefined
+  let screenshotPath
+  if (isCacheValid && cacheEntry?.screenshot_path) {
+    console.log(`[Browserless][${url.toString()}] Cache is valid`);
+
+    screenshotPath = cacheEntry.screenshot_path
+  } else {
+    console.log(`[Browserless][${url.toString()}] Cache is not valid`);
+    const base64Screenshot = await captureScreenshot(url.toString())
+    if (!base64Screenshot) {
+      screenshotPath = undefined
+    } else {
+      screenshotPath = await saveScreenshot(base64Screenshot, hash)
+      if (!cacheEntry) {
+        await addHashToGlobalCache(hash)
+      }
+      await updateScreenshotPath(hash, screenshotPath)
+    }
+  }
 
   onProgress?.(100, 'Complete')
 

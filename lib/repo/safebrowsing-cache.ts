@@ -6,6 +6,7 @@ export interface SafeBrowsingGlobalCacheRow extends RowDataPacket {
     hash: string
     screenshot_path?: string | null
     verdict?: string | null
+    expires_at?: Date | null
     created_at: Date
 }
 
@@ -100,12 +101,32 @@ export async function updateVerdict(hash: string, verdict: string): Promise<bool
 }
 
 export async function addHashWithVerdict(hash: string, verdict: string): Promise<void> {
+    const expiresAt = calculateExpiration()
     try {
         await pool.query(
-            `INSERT IGNORE INTO safebrowsing_global_cache (hash, verdict) VALUES (?, ?)`,
-            [hash, verdict]
+            `INSERT IGNORE INTO safebrowsing_global_cache (hash, verdict, expires_at) VALUES (?, ?, ?)`,
+            [hash, verdict, expiresAt]
         )
     } catch (error) {
         console.error('Add hash with verdict error:', error)
     }
+}
+
+export async function getCacheEntry(hash: string): Promise<SafeBrowsingGlobalCacheRow | null> {
+    try {
+        const [rows] = await pool.query<SafeBrowsingGlobalCacheRow[]>(
+            `SELECT * FROM safebrowsing_global_cache WHERE hash = ? LIMIT 1`,
+            [hash]
+        )
+        return rows.length > 0 ? rows[0] : null
+    } catch (error) {
+        console.error('Get cache entry error:', error)
+        return null
+    }
+}
+
+function calculateExpiration(hours: number = 72): Date {
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + hours)
+    return expiresAt
 }
