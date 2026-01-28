@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { checkWebsiteLegitimacy } from '@/lib/check-website'
+import { sendTeamsNotification } from '@/lib/services/teams'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -23,6 +24,11 @@ export async function POST(request: NextRequest) {
         }
 
         const result = await checkWebsiteLegitimacy(url, onProgress)
+
+        // Send Teams notification (non-blocking)
+        sendTeamsNotification(result, url).catch(err => {
+          console.error('Teams notification failed:', err)
+        })
 
         const finalData = `data: ${JSON.stringify({ percent: 100, result })}\n\n`
         controller.enqueue(encoder.encode(finalData))
