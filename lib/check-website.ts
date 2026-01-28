@@ -2,6 +2,7 @@ import { getDomainByDomain } from "@/lib/repo/domain"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
 import { getOrFetchScreenshot } from "@/lib/services/screenshot"
 import { sha256 } from "./shared/hash"
+import { addHashWithVerdict } from "@/lib/repo/safebrowsing-cache"
 
 export interface CheckResult {
   isLegitimate: boolean
@@ -46,9 +47,14 @@ export async function checkWebsiteLegitimacy(
 
   // URL Scanner check
   onProgress?.(20, 'Scanning with URL Scanner...')
+  let verdict = 'UNKNOWN'
   try {
     const cloudflareRadarResult = await checkCloudflareRadar(url.toString(), hash)
     onProgress?.(50, 'URL Scanner scan complete')
+
+    verdict = cloudflareRadarResult.verdict || 'UNKNOWN'
+    await addHashWithVerdict(hash, verdict)
+
     if (!cloudflareRadarResult.safe) {
       suspicionScore += 5
       details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
@@ -59,6 +65,7 @@ export async function checkWebsiteLegitimacy(
     onProgress?.(50, 'URL Scanner scan complete')
     console.error('URL Scanner check failed:', error)
     details.push(`ℹ️ URL Scanner check unavailable`)
+    await addHashWithVerdict(hash, 'UNKNOWN')
   }
 
   // Check 1: Suspicious TLDs
