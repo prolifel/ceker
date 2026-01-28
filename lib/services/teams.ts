@@ -54,7 +54,7 @@ export async function sendTeamsNotification(result: CheckResult, url: string): P
               {
                 type: 'Image',
                 url: `${BASE_URL}${result.screenshotPath}`,
-                size: 'large'
+                size: 'Large'
               }
             ] : []),
             {
