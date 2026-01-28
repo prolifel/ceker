@@ -1,5 +1,5 @@
 APP_NAME := ceker
-APP_VERSION := v1.0.10
+APP_VERSION := v1.1.0
 REGISTRY_URL ?=
 DOCKERFILE := Dockerfile
 
