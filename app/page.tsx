@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { ScreenshotDisplay } from '@/components/screenshot-display'
 import { ProgressBar } from '@/components/progress-bar'
 
@@ -14,7 +14,7 @@ interface Result {
   isLegitimate: boolean
   message: string
   details: string[]
-  screenshot?: string
+  screenshotPath?: string
 }
 
 export default function Home() {
@@ -138,7 +138,14 @@ export default function Home() {
               disabled={loading}
               className="w-full"
             >
-              {loading ? 'Checking...' : 'Check Website'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Checking...
+                </>
+              ) : (
+                'Check Website'
+              )}
             </Button>
 
             {loading && progress > 0 && (
@@ -155,10 +162,10 @@ export default function Home() {
             </div>
           )}
 
-          {result && result.screenshot && (
+          {result && result.screenshotPath && (
             <div className="mt-6 space-y-2">
               <h4 className="text-sm font-medium text-slate-700">Website Screenshot</h4>
-              <ScreenshotDisplay screenshot={result.screenshot} alt="Website screenshot" />
+              <ScreenshotDisplay screenshot={result.screenshotPath} alt="Website screenshot" />
             </div>
           )}
 

@@ -13,6 +13,9 @@ export function ScreenshotDisplay({ screenshot, alt = 'Website screenshot' }: Sc
   const [isOpen, setIsOpen] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
 
+  const isBase64 = !screenshot.startsWith('/')
+  const imageSrc = isBase64 ? `data:image/png;base64,${screenshot}` : screenshot
+
   return (
     <>
       {/* Inline thumbnail with click handler */}
@@ -26,7 +29,7 @@ export function ScreenshotDisplay({ screenshot, alt = 'Website screenshot' }: Sc
           </div>
         )}
         <img
-          src={`data:image/png;base64,${screenshot}`}
+          src={imageSrc}
           alt={alt}
           className={`w-full h-auto transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={() => setImageLoaded(true)}
@@ -45,7 +48,7 @@ export function ScreenshotDisplay({ screenshot, alt = 'Website screenshot' }: Sc
           <DialogTitle className="sr-only">Website Screenshot - Full Size</DialogTitle>
           <div className="relative w-full">
             <img
-              src={`data:image/png;base64,${screenshot}`}
+              src={imageSrc}
               alt={alt}
               className="w-full h-auto rounded-lg"
             />

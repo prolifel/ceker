@@ -1,12 +1,13 @@
-import { captureScreenshot } from "@/lib/external/browserless"
 import { getDomainByDomain } from "@/lib/repo/domain"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
+import { getOrFetchScreenshot } from "@/lib/services/screenshot"
+import { sha256 } from "./shared/hash"
 
 export interface CheckResult {
   isLegitimate: boolean
   message: string
   details: string[]
-  screenshot?: string
+  screenshotPath?: string
 }
 
 type ProgressCallback = (percent: number, message: string) => void
@@ -15,6 +16,8 @@ export async function checkWebsiteLegitimacy(
   urlString: string,
   onProgress?: ProgressCallback
 ): Promise<CheckResult> {
+  urlString = urlString.trim()
+
   const details: string[] = []
 
   // Parse and validate URL
@@ -35,13 +38,16 @@ export async function checkWebsiteLegitimacy(
 
   // Check for common phishing indicators
   const hostname = url.hostname.toLowerCase()
+  console.log(`Checking: ${url.toString()}`);
+
+  const hash = await sha256(url.toString())
 
   let suspicionScore = 0
 
   // URL Scanner check
   onProgress?.(20, 'Scanning with URL Scanner...')
   try {
-    const cloudflareRadarResult = await checkCloudflareRadar(url.toString())
+    const cloudflareRadarResult = await checkCloudflareRadar(url.toString(), hash)
     onProgress?.(50, 'URL Scanner scan complete')
     if (!cloudflareRadarResult.safe) {
       suspicionScore += 5
@@ -150,9 +156,9 @@ export async function checkWebsiteLegitimacy(
   // Determine legitimacy based on suspicion score
   const isLegitimate = suspicionScore < 4
 
-  // Capture screenshot
+  // Capture screenshot (with caching)
   onProgress?.(80, 'Capturing screenshot...')
-  const screenshot = await captureScreenshot(url.toString())
+  const screenshotPath = await getOrFetchScreenshot(url.toString(), hash) || undefined
 
   onProgress?.(100, 'Complete')
 
@@ -162,6 +168,6 @@ export async function checkWebsiteLegitimacy(
       ? '✓ Appears to be a Legitimate Website'
       : '⚠️ Website Shows Suspicious Signs',
     details,
-    screenshot: screenshot || undefined,
+    screenshotPath,
   }
 }

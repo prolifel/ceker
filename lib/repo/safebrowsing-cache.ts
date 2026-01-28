@@ -4,6 +4,7 @@ import { RowDataPacket } from 'mysql2';
 export interface SafeBrowsingGlobalCacheRow extends RowDataPacket {
     id: number
     hash: string
+    screenshot_path?: string | null
     created_at: Date
 }
 
@@ -42,5 +43,31 @@ export async function addHashesToGlobalCache(hashes: string[]): Promise<void> {
         )
     } catch (error) {
         console.error('Global cache bulk insert error:', error)
+    }
+}
+
+export async function getScreenshotPathByHash(hash: string): Promise<string | null> {
+    try {
+        const [rows] = await pool.query<SafeBrowsingGlobalCacheRow[]>(
+            `SELECT screenshot_path FROM safebrowsing_global_cache WHERE hash = ? LIMIT 1`,
+            [hash]
+        )
+        return rows.length > 0 ? rows[0].screenshot_path || null : null
+    } catch (error) {
+        console.error('Get screenshot path error:', error)
+        return null
+    }
+}
+
+export async function updateScreenshotPath(hash: string, screenshotPath: string): Promise<boolean> {
+    try {
+        await pool.query(
+            `UPDATE safebrowsing_global_cache SET screenshot_path = ? WHERE hash = ?`,
+            [screenshotPath, hash]
+        )
+        return true
+    } catch (error) {
+        console.error('Update screenshot path error:', error)
+        return false
     }
 }
