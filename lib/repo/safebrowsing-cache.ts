@@ -8,6 +8,11 @@ export interface SafeBrowsingGlobalCacheRow extends RowDataPacket {
     verdict?: string | null
     expires_at?: Date | null
     created_at: Date
+    domain_created?: Date | null
+    domain_expires?: Date | null
+    domain_registrar?: string | null
+    domain_age_days?: number | null
+    abuse_contact?: string | null
 }
 
 export async function isHashInGlobalCache(hash: string): Promise<boolean> {
@@ -122,6 +127,30 @@ export async function getCacheEntry(hash: string): Promise<SafeBrowsingGlobalCac
     } catch (error) {
         console.error('Get cache entry error:', error)
         return null
+    }
+}
+
+export async function updateWhoisData(
+    hash: string,
+    whoisData: {
+        created: Date | null
+        expires: Date | null
+        registrar: string | null
+        abuseContact: string | null
+        domainAge: number | null
+    }
+): Promise<boolean> {
+    try {
+        await pool.query(
+            `UPDATE safebrowsing_global_cache
+             SET domain_created = ?, domain_expires = ?, domain_registrar = ?, abuse_contact = ?, domain_age_days = ?
+             WHERE hash = ?`,
+            [whoisData.created, whoisData.expires, whoisData.registrar, whoisData.abuseContact, whoisData.domainAge, hash]
+        )
+        return true
+    } catch (error) {
+        console.error('Update WHOIS data error:', error)
+        return false
     }
 }
 

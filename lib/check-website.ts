@@ -1,9 +1,10 @@
 import { getDomainByDomain } from "@/lib/repo/domain"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
 import { sha256 } from "./shared/hash"
-import { addHashToGlobalCache, addHashWithVerdict, getCacheEntry, updateScreenshotPath, updateVerdict } from "@/lib/repo/safebrowsing-cache"
+import { addHashToGlobalCache, addHashWithVerdict, getCacheEntry, updateScreenshotPath, updateVerdict, updateWhoisData } from "@/lib/repo/safebrowsing-cache"
 import { captureScreenshot } from "./external/browserless"
 import { saveScreenshot } from "./shared/storage"
+import { checkWhois } from "./external/whois"
 
 export interface CheckResult {
   isLegitimate: boolean
@@ -188,6 +189,61 @@ export async function checkWebsiteLegitimacy(
     details.push('⚠️ Website is not available in our legitimate website list')
   } else {
     details.push('✓ Website is available in our legitimate website list')
+  }
+
+  // Check 8: WHOIS domain age analysis
+  onProgress?.(75, 'Checking domain registration information...')
+  let whoisData
+  if (isCacheValid && cacheEntry?.domain_age_days != null) {
+    console.log(`[whoisjs.com][${hostname}] Cache is valid`)
+    whoisData = {
+      domainAge: cacheEntry.domain_age_days,
+      expires: cacheEntry.domain_expires,
+      created: cacheEntry.domain_created,
+      registrar: cacheEntry.domain_registrar,
+      abuseContact: cacheEntry.abuse_contact,
+    }
+  } else {
+    console.log(`[whoisjs.com][${hostname}] Cache is not valid, fetching fresh data`)
+    const freshWhoisData = await checkWhois(hostname)
+    whoisData = freshWhoisData
+
+    // Update cache with WHOIS data
+    if (cacheEntry) {
+      await updateWhoisData(hash, {
+        created: freshWhoisData.created,
+        expires: freshWhoisData.expires,
+        registrar: freshWhoisData.registrar,
+        abuseContact: freshWhoisData.abuseContact,
+        domainAge: freshWhoisData.domainAge,
+      })
+    }
+  }
+
+  if (whoisData.domainAge !== null) {
+    const daysOld = whoisData.domainAge!
+    if (daysOld < 30) {
+      suspicionScore += 3
+      details.push(`⚠️ Domain is very new (${daysOld} days old)`)
+    } else {
+      details.push(`✓ Domain is established (${daysOld} days old)`)
+    }
+  } else {
+    details.push(`ℹ️ Domain age information unavailable`)
+  }
+
+  // Check domain expiration
+  if (whoisData.expires) {
+    const daysUntilExpiry = Math.floor((whoisData.expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    if (daysUntilExpiry < 30) {
+      suspicionScore += 1
+      details.push(`⚠️ Domain expires soon (${daysUntilExpiry} days)`)
+    }
+  }
+
+  // Display abuse contact information (informational only)
+  if (whoisData.abuseContact) {
+    details.push(`ℹ️ Abuse contact: ${whoisData.abuseContact}`)
   }
 
   // Determine legitimacy based on suspicion score
