@@ -26,6 +26,8 @@ services:
     networks:
       - ceker-net
       - nginx_proxy
+    volumes:
+      - screenshots-data:/app/public/screenshots
     environment:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
@@ -43,6 +45,7 @@ services:
 
 volumes:
   mysql-data:
+  screenshots-data:
 networks:
   ceker-net:
   nginx_proxy:
