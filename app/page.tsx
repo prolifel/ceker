@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { ScreenshotDisplay } from '@/components/screenshot-display'
 import { ProgressBar } from '@/components/progress-bar'
+import { AnimatedCheckingText } from '@/components/animated-checking-text'
 
 interface Result {
   isLegitimate: boolean
@@ -141,7 +142,7 @@ export default function Home() {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Checking...
+                  <AnimatedCheckingText />
                 </>
               ) : (
                 'Check Website'
