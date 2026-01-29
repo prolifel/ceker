@@ -201,16 +201,21 @@ export async function checkWebsiteLegitimacy(
 
     screenshotPath = cacheEntry.screenshot_path
   } else {
-    console.log(`[Browserless][${url.toString()}] Cache is not valid`);
-    const base64Screenshot = await captureScreenshot(url.toString())
-    if (!base64Screenshot) {
-      screenshotPath = undefined
-    } else {
-      screenshotPath = await saveScreenshot(base64Screenshot, hash)
-      if (!cacheEntry) {
-        await addHashToGlobalCache(hash)
+    try {
+      console.log(`[Browserless][${url.toString()}] Cache is not valid`);
+      const base64Screenshot = await captureScreenshot(url.toString())
+      if (!base64Screenshot) {
+        screenshotPath = undefined
+      } else {
+        screenshotPath = await saveScreenshot(base64Screenshot, hash)
+        if (!cacheEntry) {
+          await addHashToGlobalCache(hash)
+        }
+        await updateScreenshotPath(hash, screenshotPath)
       }
-      await updateScreenshotPath(hash, screenshotPath)
+    } catch (error) {
+      console.error(error)
+      screenshotPath = undefined
     }
   }
 
