@@ -12,7 +12,7 @@ export async function saveScreenshot(base64Data: string, hash: string): Promise<
   try {
     await mkdir(SCREENSHOTS_DIR, { recursive: true })
     await writeFile(filepath, buffer)
-    return `/screenshots/${filename}`
+    return `/api/screenshots/${filename}`
   } catch (error) {
     console.error('Failed to save screenshot:', error)
     throw error
