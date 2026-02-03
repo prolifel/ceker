@@ -5,6 +5,7 @@ import { addHashToGlobalCache, addHashWithVerdict, getCacheEntry, updateScreensh
 import { captureScreenshot } from "./external/browserless"
 import { saveScreenshot } from "./shared/storage"
 import { checkWhois } from "./external/whois"
+import { getRootDomain } from "@/lib/utils/domain"
 
 export interface CheckResult {
   isLegitimate: boolean
@@ -199,6 +200,11 @@ export async function checkWebsiteLegitimacy(
 
   // Check 7: WHOIS domain age analysis
   onProgress?.(75, 'Checking domain registration information...')
+
+  // Extract root domain for WHOIS lookup (e.g., web.whatsapp.com → whatsapp.com)
+  const rootDomain = getRootDomain(hostname)
+  const domainSuffix = rootDomain !== hostname ? ` (${rootDomain})` : ''
+
   let whoisData
   if (isCacheValid && cacheEntry?.domain_age_days != null) {
     console.log(`[whoisjs.com][${hostname}] Cache is valid`)
@@ -210,8 +216,8 @@ export async function checkWebsiteLegitimacy(
       abuseContact: cacheEntry.abuse_contact,
     }
   } else {
-    console.log(`[whoisjs.com][${hostname}] Cache is not valid, fetching fresh data`)
-    const freshWhoisData = await checkWhois(hostname)
+    console.log(`[whoisjs.com][${hostname}] Cache is not valid, fetching fresh data for ${rootDomain}`)
+    const freshWhoisData = await checkWhois(rootDomain)
     whoisData = freshWhoisData
 
     // Update cache with WHOIS data
@@ -230,12 +236,12 @@ export async function checkWebsiteLegitimacy(
     const daysOld = whoisData.domainAge!
     if (daysOld < 30) {
       suspicionScore += 3
-      details.push(`⚠️ Domain is very new (${daysOld} days old)`)
+      details.push(`⚠️ Domain is very new (${daysOld} days old)${domainSuffix}`)
     } else {
-      details.push(`✓ Domain is established (${daysOld} days old)`)
+      details.push(`✓ Domain is established (${daysOld} days old)${domainSuffix}`)
     }
   } else {
-    details.push(`ℹ️ Domain age information unavailable`)
+    details.push(`ℹ️ Domain age information unavailable${domainSuffix}`)
   }
 
   // Check domain expiration
