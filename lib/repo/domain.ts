@@ -14,6 +14,11 @@ export type CreateDomainResult =
     | { ok: true; data: Domain }
     | { ok: false; error: 'DUPLICATE_DOMAIN' | 'UNKNOWN_ERROR' };
 
+export type BulkCreateDomainResult = {
+    ok: true
+    failed: string[]
+};
+
 interface MySQLError extends Error {
     code?: string;
     sqlMessage?: string;
@@ -68,5 +73,47 @@ export async function createDomain(domainName: string): Promise<CreateDomainResu
 
         console.error(error)
         return { ok: false, error: "UNKNOWN_ERROR" }
+    }
+}
+
+export async function createDomains(domainNames: string[]): Promise<BulkCreateDomainResult> {
+    if (domainNames.length === 0) {
+        return { ok: true, failed: [] }
+    }
+
+    try {
+        // Filter out empty strings
+        const validDomains = domainNames.filter(d => d && d.trim().length > 0)
+
+        if (validDomains.length === 0) {
+            return { ok: true, failed: [] }
+        }
+
+        // Get existing domains to identify duplicates
+        const [existingRows] = await pool.query<DomainRow[]>(
+            `select domain from domains where domain in (?)`,
+            [validDomains]
+        )
+
+        const existingDomains = new Set(existingRows.map(row => row.domain))
+        const newDomains = validDomains.filter(d => !existingDomains.has(d))
+
+        // Insert only new domains
+        if (newDomains.length > 0) {
+            const values = newDomains.map(() => '(?)').join(',')
+            await pool.execute(
+                `insert into domains(domain) values ${values}`,
+                newDomains
+            )
+        }
+
+        return {
+            ok: true,
+            failed: validDomains.filter(d => existingDomains.has(d))
+        }
+    } catch (error) {
+        console.error(error)
+        // On any error, return all domains as failed to be safe
+        return { ok: true, failed: domainNames }
     }
 }

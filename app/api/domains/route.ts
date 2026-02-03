@@ -1,4 +1,4 @@
-import { createDomain, getAllDomains, getDomainByDomain } from "@/lib/repo/domain"
+import { createDomain, createDomains, getAllDomains, getDomainByDomain } from "@/lib/repo/domain"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
@@ -22,6 +22,42 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const req = await request.json()
+
+        // Handle multiple domains (array)
+        if ("domains" in req && Array.isArray(req.domains)) {
+            if (req.domains.length === 0) {
+                return NextResponse.json({
+                    message: "bad request, domains array is empty",
+                    data: null
+                }, {
+                    status: 400
+                })
+            }
+
+            const res = await createDomains(req.domains)
+
+            if (res.failed.length > 0) {
+                return NextResponse.json({
+                    message: "partial success",
+                    data: {
+                        failed: res.failed
+                    }
+                }, {
+                    status: 207  // Multi-Status for partial success
+                })
+            }
+
+            return NextResponse.json({
+                message: "success",
+                data: {
+                    failed: []
+                }
+            }, {
+                status: 201
+            })
+        }
+
+        // Handle single domain (backward compatibility)
         if ("domain" in req) {
             const res = await createDomain(req.domain)
             if (!res.ok) {
@@ -51,7 +87,7 @@ export async function POST(request: NextRequest) {
         }
 
         return NextResponse.json({
-            message: "bad request, domain is required",
+            message: "bad request, domain or domains is required",
             data: null
         }, {
             status: 400
