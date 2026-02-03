@@ -1,4 +1,5 @@
 import { getDomainByDomain } from "@/lib/repo/domain"
+import { getTLD } from "@/lib/repo/tld"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
 import { sha256 } from "./shared/hash"
 import { addHashToGlobalCache, addHashWithVerdict, getCacheEntry, updateScreenshotPath, updateVerdict, updateWhoisData } from "@/lib/repo/safebrowsing-cache"
@@ -116,13 +117,27 @@ export async function checkWebsiteLegitimacy(
     }
   }
 
-  // Check 1: Suspicious TLDs
+  // Check 1: TLD validation
+  // Extract TLD from hostname (e.g., .com, .org, .co.uk)
   const suspiciousTLDs = ['.tk', '.ml', '.ga', '.cf']
-  if (suspiciousTLDs.some((tld) => hostname.endsWith(tld))) {
+  const tldMatch = hostname.match(/\.([a-z]{2,63})$/i)
+  const tld = tldMatch ? `.${tldMatch[1].toLowerCase()}` : null
+
+  if (tld && suspiciousTLDs.some((suspicious) => tld === suspicious)) {
     suspicionScore += 2
     details.push('⚠️ Uses a free/suspicious top-level domain')
+  } else if (tld) {
+    // Check if TLD is valid (in database)
+    const tldExists = await getTLD(tld)
+    if (tldExists) {
+      details.push('✓ Uses a standard domain extension')
+    } else {
+      suspicionScore += 2
+      details.push('⚠️ The domain extension is unknown')
+    }
   } else {
-    details.push('✓ Uses a standard domain extension')
+    suspicionScore += 2
+    details.push('⚠️ The domain extension is unknown')
   }
 
   // Check 2: Check for common phishing patterns
