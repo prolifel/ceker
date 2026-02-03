@@ -10,6 +10,7 @@ interface ScanResult {
     url: string
     success: boolean
     status: string
+    visibility?: string
   }
   verdicts?: {
     overall?: {

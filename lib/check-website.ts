@@ -45,6 +45,18 @@ export async function checkWebsiteLegitimacy(
 
   const hash = await sha256(url.toString())
 
+  // === CHECK 1: Legitimate Domain List (EARLY EXIT) ===
+  onProgress?.(15, 'Checking legitimate domain list...')
+  const legitimateDomain = await getDomainByDomain(hostname)
+  if (legitimateDomain != null) {
+    onProgress?.(100, 'Complete')
+    return {
+      isLegitimate: true,
+      message: '✓ Appears to be a Legitimate Website',
+      details: ['✓ Website is available in our legitimate website list'],
+    }
+  }
+
   // Check cache first
   const cacheEntry = await getCacheEntry(hash)
   const isCacheValid = cacheEntry && cacheEntry?.verdict != 'UNKNOWN' && (cacheEntry.expires_at && new Date() < cacheEntry.expires_at)
@@ -71,19 +83,23 @@ export async function checkWebsiteLegitimacy(
 
     let verdict = 'UNKNOWN'
     try {
-      const cloudflareRadarResult = await checkCloudflareRadar(url.toString(), hash)
+      const cloudflareRadarResult = await checkCloudflareRadar(url.toString())
       onProgress?.(50, 'URL Scanner scan complete')
 
       verdict = cloudflareRadarResult.verdict || 'UNKNOWN'
+      console.log(`Verdict: ${verdict}`);
+
       if (cacheEntry) {
         await updateVerdict(hash, verdict)
       } else {
         await addHashWithVerdict(hash, verdict)
       }
 
-      if (!cloudflareRadarResult.safe) {
+      if (!cloudflareRadarResult.safe && !cloudflareRadarResult.unlisted) {
         suspicionScore += 5
         details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
+      } else if (cloudflareRadarResult.unlisted) {
+        details.push(`ℹ️ The URL is unlisted`)
       } else {
         details.push(`✓ Passed URL Scanner check`)
       }
@@ -181,17 +197,7 @@ export async function checkWebsiteLegitimacy(
     details.push('✓ Uses proper domain name')
   }
 
-  // Check 7: Check for internal list
-  onProgress?.(70, 'Checking domain database...')
-  const data = await getDomainByDomain(hostname)
-  if (data == null) {
-    suspicionScore += 1
-    details.push('⚠️ Website is not available in our legitimate website list')
-  } else {
-    details.push('✓ Website is available in our legitimate website list')
-  }
-
-  // Check 8: WHOIS domain age analysis
+  // Check 7: WHOIS domain age analysis
   onProgress?.(75, 'Checking domain registration information...')
   let whoisData
   if (isCacheValid && cacheEntry?.domain_age_days != null) {
