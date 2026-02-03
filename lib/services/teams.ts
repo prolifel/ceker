@@ -1,5 +1,7 @@
+type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
+
 interface CheckResult {
-  isLegitimate: boolean
+  riskLevel: RiskLevel
   message: string
   details: string[]
   screenshotPath?: string
@@ -15,8 +17,8 @@ export async function sendTeamsNotification(result: CheckResult, url: string): P
     return
   }
 
-  const statusColor = result.isLegitimate ? 'Good' : 'Warning'
-  const statusText = result.isLegitimate ? 'Legitimate' : 'Suspicious'
+  const statusColor = result.riskLevel === 'LEGITIMATE' ? 'Good' : result.riskLevel === 'WARNING' ? 'Attention' : 'Warning'
+  const statusText = result.riskLevel
 
   const card = {
     type: 'message',
