@@ -10,6 +10,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { ScreenshotDisplay } from '@/components/screenshot-display'
 import { ProgressBar } from '@/components/progress-bar'
 import { AnimatedCheckingText } from '@/components/animated-checking-text'
+import { getUrlError, normalizeUrl } from '@/lib/utils/url'
 
 interface Result {
   isLegitimate: boolean
@@ -33,8 +34,10 @@ export default function Home() {
     setProgress(0)
     setProgressMessage('')
 
-    if (!url.trim()) {
-      setError('Please enter a URL')
+    // Validate URL format
+    const urlError = getUrlError(url)
+    if (urlError) {
+      setError(urlError)
       return
     }
 
@@ -42,11 +45,14 @@ export default function Home() {
     setProgress(0)
     setProgressMessage('Starting scan...')
 
+    // Normalize URL (add https:// if missing)
+    const normalizedUrl = normalizeUrl(url)
+
     try {
       const response = await fetch('/api/check-website', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url: normalizedUrl })
       })
 
       if (!response.ok) {
