@@ -8,8 +8,10 @@ import { saveScreenshot } from "./shared/storage"
 import { checkWhois } from "./external/whois"
 import { getRootDomain } from "@/lib/utils/domain"
 
+export type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
+
 export interface CheckResult {
-  isLegitimate: boolean
+  riskLevel: RiskLevel
   message: string
   details: string[]
   screenshotPath?: string
@@ -35,7 +37,7 @@ export async function checkWebsiteLegitimacy(
     onProgress?.(10, 'URL validated')
   } catch {
     return {
-      isLegitimate: false,
+      riskLevel: 'WARNING',
       message: 'Invalid URL Format',
       details: ['The URL you entered is not in a valid format.'],
     }
@@ -53,7 +55,7 @@ export async function checkWebsiteLegitimacy(
   if (legitimateDomain != null) {
     onProgress?.(100, 'Complete')
     return {
-      isLegitimate: true,
+      riskLevel: 'LEGITIMATE',
       message: '✓ Appears to be a Legitimate Website',
       details: ['✓ Website is available in our legitimate website list'],
     }
@@ -63,17 +65,20 @@ export async function checkWebsiteLegitimacy(
   const cacheEntry = await getCacheEntry(hash)
   const isCacheValid = cacheEntry && cacheEntry?.verdict != 'UNKNOWN' && (cacheEntry.expires_at && new Date() < cacheEntry.expires_at)
 
-  let suspicionScore = 0
+  // Track flags for 3-tier classification
+  let passedCloudflare = false
+  let cloudflareVerdict: string = 'UNKNOWN'
 
   // URL Scanner check
   onProgress?.(20, 'Scanning with URL Scanner...')
   if (isCacheValid) {
     console.log(`[Cloudflare Radar][${url.toString()}] Cache is valid`);
 
-    if (cacheEntry?.verdict == 'MALICIOUS' || cacheEntry?.verdict == 'PHISHING') {
-      suspicionScore += 5
-      details.push(`⚠️ URL Scanner detected threats: ${cacheEntry?.verdict}.`)
-    } else if (cacheEntry?.verdict == 'SAFE') {
+    cloudflareVerdict = cacheEntry?.verdict || 'UNKNOWN'
+    if (cloudflareVerdict == 'MALICIOUS' || cloudflareVerdict == 'PHISHING') {
+      details.push(`⚠️ URL Scanner detected threats: ${cloudflareVerdict}.`)
+    } else if (cloudflareVerdict == 'SAFE') {
+      passedCloudflare = true
       details.push(`✓ Passed URL Scanner check`)
     } else {
       details.push(`⚠️ URL Scanner not available`)
@@ -89,6 +94,7 @@ export async function checkWebsiteLegitimacy(
       onProgress?.(50, 'URL Scanner scan complete')
 
       verdict = cloudflareRadarResult.verdict || 'UNKNOWN'
+      cloudflareVerdict = verdict
       console.log(`Verdict: ${verdict}`);
 
       if (cacheEntry) {
@@ -98,11 +104,11 @@ export async function checkWebsiteLegitimacy(
       }
 
       if (!cloudflareRadarResult.safe && !cloudflareRadarResult.unlisted) {
-        suspicionScore += 5
         details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
       } else if (cloudflareRadarResult.unlisted) {
         details.push(`ℹ️ The URL is unlisted`)
       } else {
+        passedCloudflare = true
         details.push(`✓ Passed URL Scanner check`)
       }
     } catch (error) {
@@ -123,8 +129,10 @@ export async function checkWebsiteLegitimacy(
   const tldMatch = hostname.match(/\.([a-z]{2,63})$/i)
   const tld = tldMatch ? `.${tldMatch[1].toLowerCase()}` : null
 
+  let unusualTLD = false
+
   if (tld && suspiciousTLDs.some((suspicious) => tld === suspicious)) {
-    suspicionScore += 2
+    unusualTLD = true
     details.push('⚠️ Uses a free/suspicious top-level domain')
   } else if (tld) {
     // Check if TLD is valid (in database)
@@ -132,11 +140,11 @@ export async function checkWebsiteLegitimacy(
     if (tldExists) {
       details.push('✓ Uses a standard domain extension')
     } else {
-      suspicionScore += 2
+      unusualTLD = true
       details.push('⚠️ The domain extension is unknown')
     }
   } else {
-    suspicionScore += 2
+    unusualTLD = true
     details.push('⚠️ The domain extension is unknown')
   }
 
@@ -157,21 +165,12 @@ export async function checkWebsiteLegitimacy(
   )
 
   if (hostnameHasPhishingKeywords) {
-    suspicionScore += 1
     details.push('⚠️ Domain contains common phishing keywords')
   }
 
-  // Check 3: HTTPS verification
-  if (url.protocol === 'https:') {
-    details.push('✓ Uses secure connection')
-  } else {
-    suspicionScore += 3
-    details.push('⚠️ Does not use encryption')
-  }
-
-  // Check 4: Try to fetch the website
+  // Check 3: HTTPS verification + Reachability check (merged)
   let isReachable = false
-  let hasValidSSL = false
+  const usesHttps = url.protocol === 'https:'
 
   try {
     const controller = new AbortController()
@@ -184,33 +183,26 @@ export async function checkWebsiteLegitimacy(
 
     clearTimeout(timeoutId)
     isReachable = response.ok || response.status < 400
-    hasValidSSL = true
   } catch (error) {
-    if (url.protocol === 'https:') {
-      suspicionScore += 2
-      details.push('⚠️ Website cannot be reached')
-    } else {
-      suspicionScore += 1
-      details.push('⚠️ Website could not be reached')
-    }
+    // Website not reachable
+    isReachable = false
   }
 
-  if (isReachable && url.protocol === 'https:') {
-    details.push('✓ Website is reachable and responding')
-  }
-
-  // Check 5: Domain age consideration (basic heuristic)
-  if (hostname.split('.').length > 3) {
-    suspicionScore += 1
-    details.push('⚠️ Domain structure seems unusual (subdomain heavy)')
-  }
-
-  // Check 6: Check for IP address instead of domain
-  if (/^\d+\.\d+\.\d+\.\d+/.test(hostname)) {
-    suspicionScore += 3
-    details.push('⚠️ Uses IP address instead of domain name')
+  // Report combined HTTPS + reachability status
+  if (isReachable && usesHttps) {
+    details.push('✓ Website is reachable, responding, and using secure connection')
+  } else if (isReachable && !usesHttps) {
+    details.push('⚠️ Website is reachable, but not using secure connection')
+  } else if (!isReachable && usesHttps) {
+    details.push('⚠️ Website cannot be reached')
   } else {
-    details.push('✓ Uses proper domain name')
+    details.push('⚠️ Website could not be reached')
+  }
+
+  // Check 4: Subdomain check
+  const subdomainHeavy = hostname.split('.').length > 3
+  if (subdomainHeavy) {
+    details.push('⚠️ Domain structure seems unusual (subdomain heavy)')
   }
 
   // Check 7: WHOIS domain age analysis
@@ -219,6 +211,8 @@ export async function checkWebsiteLegitimacy(
   // Extract root domain for WHOIS lookup (e.g., web.whatsapp.com → whatsapp.com)
   const rootDomain = getRootDomain(hostname)
   const domainSuffix = rootDomain !== hostname ? ` (${rootDomain})` : ''
+
+  let domainAge: number | null = null
 
   let whoisData
   if (isCacheValid && cacheEntry?.domain_age_days != null) {
@@ -230,31 +224,29 @@ export async function checkWebsiteLegitimacy(
       registrar: cacheEntry.domain_registrar,
       abuseContact: cacheEntry.abuse_contact,
     }
+    domainAge = cacheEntry.domain_age_days
   } else {
     console.log(`[whoisjs.com][${hostname}] Cache is not valid, fetching fresh data for ${rootDomain}`)
     const freshWhoisData = await checkWhois(rootDomain)
     whoisData = freshWhoisData
+    domainAge = freshWhoisData.domainAge
 
     // Update cache with WHOIS data
-    if (cacheEntry) {
-      await updateWhoisData(hash, {
-        created: freshWhoisData.created,
-        expires: freshWhoisData.expires,
-        registrar: freshWhoisData.registrar,
-        abuseContact: freshWhoisData.abuseContact,
-        domainAge: freshWhoisData.domainAge,
-      })
+    if (!cacheEntry) {
+      await addHashToGlobalCache(hash)
     }
+    await updateWhoisData(hash, {
+      created: freshWhoisData.created,
+      expires: freshWhoisData.expires,
+      registrar: freshWhoisData.registrar,
+      abuseContact: freshWhoisData.abuseContact,
+      domainAge: freshWhoisData.domainAge,
+    })
   }
 
-  if (whoisData.domainAge !== null) {
-    const daysOld = whoisData.domainAge!
-    if (daysOld < 30) {
-      suspicionScore += 3
-      details.push(`⚠️ Domain is very new (${daysOld} days old)${domainSuffix}`)
-    } else {
-      details.push(`✓ Domain is established (${daysOld} days old)${domainSuffix}`)
-    }
+  if (domainAge !== null) {
+    const daysOld = domainAge
+    details.push(`✓ Domain is ${daysOld} days old${domainSuffix}`)
   } else {
     details.push(`ℹ️ Domain age information unavailable${domainSuffix}`)
   }
@@ -263,7 +255,6 @@ export async function checkWebsiteLegitimacy(
   if (whoisData.expires) {
     const daysUntilExpiry = Math.floor((whoisData.expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     if (daysUntilExpiry < 30) {
-      suspicionScore += 1
       details.push(`⚠️ Domain expires soon (${daysUntilExpiry} days)`)
     }
   }
@@ -273,8 +264,45 @@ export async function checkWebsiteLegitimacy(
     details.push(`ℹ️ Abuse contact: ${whoisData.abuseContact}`)
   }
 
-  // Determine legitimacy based on suspicion score
-  const isLegitimate = suspicionScore < 4
+  // === 3-TIER CLASSIFICATION ===
+  // Determine risk level based on collected flags
+  // Priority order: domain age (highest) -> TLD/subdomain -> HTTPS -> Cloudflare (lowest)
+  let riskLevel: RiskLevel = 'LEGITIMATE'
+  let message = '✓ Appears to be a Legitimate Website'
+
+  if (domainAge !== null && domainAge < 20) {
+    // Very new domain (< 20 days) - Warning - HIGHEST PRIORITY
+    riskLevel = 'WARNING'
+    message = '⚠️ High Risk - Very New Domain'
+  } else if (unusualTLD && subdomainHeavy) {
+    // Unusual TLD + subdomain heavy - Warning
+    riskLevel = 'WARNING'
+    message = '⚠️ High Risk - Suspicious Domain Structure'
+  } else if (unusualTLD) {
+    // Unusual TLD alone - Warning
+    riskLevel = 'WARNING'
+    message = '⚠️ High Risk - Unusual Domain Extension'
+  } else if (!usesHttps) {
+    // Not using HTTPS - Warning
+    riskLevel = 'WARNING'
+    message = '⚠️ High Risk - Not Using Secure Connection'
+  } else if (domainAge !== null && domainAge < 90) {
+    // New domain (< 90 days) - Suspicious
+    riskLevel = 'SUSPICIOUS'
+    message = '⚠️ Suspicious - Recently Registered Domain'
+  } else if (subdomainHeavy) {
+    // Subdomain heavy - Suspicious
+    riskLevel = 'SUSPICIOUS'
+    message = '⚠️ Suspicious - Unusual Domain Structure'
+  } else if (passedCloudflare) {
+    // Passed Cloudflare Radar - Legitimate (only if above checks pass)
+    riskLevel = 'LEGITIMATE'
+    message = '✓ Appears to be a Legitimate Website'
+  } else {
+    // Default for established domains without Cloudflare check
+    riskLevel = 'LEGITIMATE'
+    message = '✓ Appears to be a Legitimate Website'
+  }
 
   // Capture screenshot (with caching)
   onProgress?.(80, 'Capturing screenshot...')
@@ -305,10 +333,8 @@ export async function checkWebsiteLegitimacy(
   onProgress?.(100, 'Complete')
 
   return {
-    isLegitimate,
-    message: isLegitimate
-      ? '✓ Appears to be a Legitimate Website'
-      : '⚠️ Website Shows Suspicious Signs',
+    riskLevel,
+    message,
     details,
     screenshotPath,
   }

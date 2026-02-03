@@ -58,7 +58,7 @@ export async function checkCloudflareRadar(sanitized: string): Promise<{
   } catch (error) {
     console.error('Cloudflare Radar scan error:', error)
     return {
-      safe: true,
+      safe: false,
       details: 'Scan unavailable',
       threatTypes: ['UNKNOWN'],
       verdict: 'UNKNOWN',

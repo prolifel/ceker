@@ -6,14 +6,16 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { ScreenshotDisplay } from '@/components/screenshot-display'
 import { ProgressBar } from '@/components/progress-bar'
 import { AnimatedCheckingText } from '@/components/animated-checking-text'
 import { getUrlError, normalizeUrl } from '@/lib/utils/url'
 
+type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
+
 interface Result {
-  isLegitimate: boolean
+  riskLevel: RiskLevel
   message: string
   details: string[]
   screenshotPath?: string
@@ -178,31 +180,42 @@ export default function Home() {
 
           {result && (
             <div
-              className={`mt-6 p-4 rounded-lg border-2 ${result.isLegitimate
-                ? 'bg-green-50 border-green-200'
-                : 'bg-red-50 border-red-200'
-                }`}
+              className={`mt-6 p-4 rounded-lg border-2 ${
+                result.riskLevel === 'LEGITIMATE'
+                  ? 'bg-green-50 border-green-200'
+                  : result.riskLevel === 'SUSPICIOUS'
+                  ? 'bg-yellow-50 border-yellow-200'
+                  : 'bg-red-50 border-red-200'
+              }`}
             >
               <div className="flex items-start gap-3">
-                {result.isLegitimate ? (
+                {result.riskLevel === 'LEGITIMATE' ? (
                   <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                ) : result.riskLevel === 'SUSPICIOUS' ? (
+                  <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                 ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                 )}
                 <div className="flex-1">
                   <h3
-                    className={`font-semibold mb-1 ${result.isLegitimate
-                      ? 'text-green-900'
-                      : 'text-red-900'
-                      }`}
+                    className={`font-semibold mb-1 ${
+                      result.riskLevel === 'LEGITIMATE'
+                        ? 'text-green-900'
+                        : result.riskLevel === 'SUSPICIOUS'
+                        ? 'text-yellow-900'
+                        : 'text-red-900'
+                    }`}
                   >
                     {result.message}
                   </h3>
                   <ul
-                    className={`text-sm space-y-1 ${result.isLegitimate
-                      ? 'text-green-800'
-                      : 'text-red-800'
-                      }`}
+                    className={`text-sm space-y-1 ${
+                      result.riskLevel === 'LEGITIMATE'
+                        ? 'text-green-800'
+                        : result.riskLevel === 'SUSPICIOUS'
+                        ? 'text-yellow-800'
+                        : 'text-red-800'
+                    }`}
                   >
                     {result.details.map((detail, idx) => (
                       <li key={idx}>• {detail}</li>
