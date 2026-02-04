@@ -27,6 +27,8 @@ export interface CheckResultError {
   status: 'error'
   message: string
   details: string[]
+  // Logging data
+  hostname: string
 }
 
 export interface CheckResultSuccess {
@@ -35,6 +37,12 @@ export interface CheckResultSuccess {
   message: string
   details: string[]
   screenshotPath?: string
+  // Logging data
+  hostname: string
+  cloudflareVerdict?: string
+  domainAgeDays?: number
+  domainExpires?: Date
+  domainRegistrar?: string
 }
 
 export type CheckResultV2 = CheckResultNotInDB | CheckResultError | CheckResultSuccess
@@ -68,6 +76,7 @@ export async function checkWebsiteLegitimacy(
       status: 'error',
       message: 'Invalid URL Format',
       details: ['The URL you entered is not in a valid format.'],
+      hostname: urlString,
     }
   }
 
@@ -83,6 +92,7 @@ export async function checkWebsiteLegitimacy(
       status: 'error',
       message: 'Invalid URL',
       details: [tldValidation.reason || 'The domain extension is invalid.'],
+      hostname,
     }
   }
 
@@ -96,6 +106,7 @@ export async function checkWebsiteLegitimacy(
       riskLevel: 'LEGITIMATE',
       message: '✓ Appears to be a Legitimate Website',
       details: ['✓ Website is available in our legitimate website list'],
+      hostname,
     }
   }
 
@@ -387,5 +398,10 @@ export async function checkWebsiteLegitimacy(
     message,
     details,
     screenshotPath,
+    hostname,
+    cloudflareVerdict,
+    domainAgeDays: domainAge ?? undefined,
+    domainExpires: whoisData?.expires ?? undefined,
+    domainRegistrar: whoisData?.registrar ?? undefined,
   }
 }
