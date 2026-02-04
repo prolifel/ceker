@@ -1,0 +1,25 @@
+{
+  "name": "ceker-teams-bot",
+  "version": "1.0.0",
+  "description": "Microsoft Teams bot for Ceker - link checker service",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader ts-node/esm server.ts",
+    "dev": "node --loader ts-node/esm --watch server.ts",
+    "build": "tsc",
+    "start:dist": "node dist/server.js"
+  },
+  "dependencies": {
+    "botbuilder": "^4.22.0",
+    "express": "^4.18.0",
+    "dotenv": "^16.4.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.19.7",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.2"
+  }
+}

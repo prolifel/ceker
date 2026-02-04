@@ -39,9 +39,25 @@ services:
       - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
       - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
       - APP_URL=${APP_URL}
+      - BOT_API_KEY=${BOT_API_KEY}
     depends_on:
       mysql:
         condition: service_healthy
+
+  ceker-teams:
+    image: cr.prolifel.com/ceker-teams:latest
+    ports:
+      - "3978:3978"
+    networks:
+      - nginx_proxy
+    environment:
+      - MicrosoftAppId=${MicrosoftAppId}
+      - MicrosoftAppPassword=${MicrosoftAppPassword}
+      - PORT=${PORT}
+      - BOT_ENDPOINT_URL=${BOT_ENDPOINT_URL}
+      - CHECK_API_URL=${CHECK_API_URL}
+      - BOT_API_KEY=${BOT_API_KEY}
+      - CTI_API_URL=${CTI_API_URL}
 
 volumes:
   mysql-data:
