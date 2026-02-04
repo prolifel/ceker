@@ -7,6 +7,7 @@ import { captureScreenshot } from "./external/browserless"
 import { saveScreenshot } from "./shared/storage"
 import { checkWhois } from "./external/whois"
 import { getRootDomain } from "@/lib/utils/domain"
+import { validateTLD } from "@/lib/utils/tld"
 
 export type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
 
@@ -17,12 +18,39 @@ export interface CheckResult {
   screenshotPath?: string
 }
 
+export interface CheckResultNotInDB {
+  status: 'not_in_db'
+  hostname: string
+}
+
+export interface CheckResultError {
+  status: 'error'
+  message: string
+  details: string[]
+}
+
+export interface CheckResultSuccess {
+  status: 'success'
+  riskLevel: RiskLevel
+  message: string
+  details: string[]
+  screenshotPath?: string
+}
+
+export type CheckResultV2 = CheckResultNotInDB | CheckResultError | CheckResultSuccess
+
+// Optional flag to bypass domain check (when user confirms "Yes")
+interface CheckOptions {
+  bypassDomainCheck?: boolean
+}
+
 type ProgressCallback = (percent: number, message: string) => void
 
 export async function checkWebsiteLegitimacy(
   urlString: string,
-  onProgress?: ProgressCallback
-): Promise<CheckResult> {
+  onProgress?: ProgressCallback,
+  options?: CheckOptions
+): Promise<CheckResultV2> {
   urlString = urlString.trim()
 
   const details: string[] = []
@@ -34,10 +62,10 @@ export async function checkWebsiteLegitimacy(
       ? urlString
       : `https://${urlString}`
     url = new URL(normalizedUrl)
-    onProgress?.(10, 'URL validated')
+    onProgress?.(5, 'URL validated')
   } catch {
     return {
-      riskLevel: 'WARNING',
+      status: 'error',
       message: 'Invalid URL Format',
       details: ['The URL you entered is not in a valid format.'],
     }
@@ -45,21 +73,42 @@ export async function checkWebsiteLegitimacy(
 
   // Check for common phishing indicators
   const hostname = url.hostname.toLowerCase()
-  console.log(`Checking: ${url.toString()}`);
+  console.log(`Checking: ${url.toString()}`)
 
-  const hash = await sha256(url.toString())
+  // === TLD VALIDATION (EARLY EXIT) ===
+  onProgress?.(10, 'Validating domain extension...')
+  const tldValidation = await validateTLD(hostname)
+  if (!tldValidation.valid) {
+    return {
+      status: 'error',
+      message: 'Invalid URL',
+      details: [tldValidation.reason || 'The domain extension is invalid.'],
+    }
+  }
 
-  // === CHECK 1: Legitimate Domain List (EARLY EXIT) ===
+  // === CHECK 1: Legitimate Domain List (EARLY EXIT or PROMPT) ===
   onProgress?.(15, 'Checking legitimate domain list...')
   const legitimateDomain = await getDomainByDomain(hostname)
   if (legitimateDomain != null) {
     onProgress?.(100, 'Complete')
     return {
+      status: 'success',
       riskLevel: 'LEGITIMATE',
       message: '✓ Appears to be a Legitimate Website',
       details: ['✓ Website is available in our legitimate website list'],
     }
   }
+
+  // If domain not in database and not bypassing, prompt user
+  if (!options?.bypassDomainCheck) {
+    return {
+      status: 'not_in_db',
+      hostname
+    }
+  }
+
+  // Calculate hash for caching
+  const hash = await sha256(url.toString())
 
   // Check cache first
   const cacheEntry = await getCacheEntry(hash)
@@ -106,7 +155,7 @@ export async function checkWebsiteLegitimacy(
       if (!cloudflareRadarResult.safe && !cloudflareRadarResult.unlisted) {
         details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
       } else if (cloudflareRadarResult.unlisted) {
-        details.push(`ℹ️ The URL is unlisted`)
+        details.push(`ℹ️ The URL is not registered in internal website.`)
       } else {
         passedCloudflare = true
         details.push(`✓ Passed URL Scanner check`)
@@ -333,6 +382,7 @@ export async function checkWebsiteLegitimacy(
   onProgress?.(100, 'Complete')
 
   return {
+    status: 'success',
     riskLevel,
     message,
     details,

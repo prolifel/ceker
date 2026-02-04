@@ -21,6 +21,12 @@ interface Result {
   screenshotPath?: string
 }
 
+interface Prompt {
+  message: string
+  detail: string
+  hostname: string
+}
+
 export default function Home() {
   const [url, setUrl] = useState('')
   const [result, setResult] = useState<Result | null>(null)
@@ -28,11 +34,13 @@ export default function Home() {
   const [error, setError] = useState('')
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
+  const [prompt, setPrompt] = useState<Prompt | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, bypassDomainCheck = false) => {
     e.preventDefault()
     setError('')
     setResult(null)
+    setPrompt(null)
     setProgress(0)
     setProgressMessage('')
 
@@ -54,7 +62,7 @@ export default function Home() {
       const response = await fetch('/api/check-website', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: normalizedUrl })
+        body: JSON.stringify({ url: normalizedUrl, bypassDomainCheck })
       })
 
       if (!response.ok) {
@@ -85,6 +93,12 @@ export default function Home() {
               if (data.error) {
                 throw new Error(data.message || 'Scan failed')
               }
+              if (data.prompt) {
+                // Show prompt to user
+                setPrompt(data.prompt)
+                setProgress(data.percent)
+                setProgressMessage(data.message || '')
+              }
               if (data.percent !== undefined) {
                 setProgress(data.percent)
                 if (data.message) {
@@ -110,12 +124,23 @@ export default function Home() {
     }
   }
 
+  const handleContinueCheck = () => {
+    handleSubmit(new Event('submit'), true)
+  }
+
+  const handleCancel = () => {
+    setPrompt(null)
+    setUrl('')
+    setProgress(0)
+    setProgressMessage('')
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">
-            Website Checker
+            Ceker - Your Truly Link Checker
           </h1>
           <p className="text-slate-600">
             Verify if a website is legitimate or suspicious
@@ -123,7 +148,7 @@ export default function Home() {
         </div>
 
         <Card className="p-8 shadow-lg">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4">
             <div>
               <label
                 htmlFor="url"
@@ -168,6 +193,26 @@ export default function Home() {
             <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          {prompt && (
+            <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-yellow-800 font-medium">{prompt.message}</p>
+                  <p className="text-sm text-yellow-700 mt-1">{prompt.detail}</p>
+                  <div className="flex gap-2 mt-3">
+                    <Button onClick={handleContinueCheck} className="bg-yellow-600 hover:bg-yellow-700">
+                      Yes, continue
+                    </Button>
+                    <Button variant="outline" onClick={handleCancel} className="border-yellow-300 text-yellow-700 hover:bg-yellow-50">
+                      No, cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

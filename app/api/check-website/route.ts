@@ -4,7 +4,7 @@ import { sendTeamsNotification } from '@/lib/services/teams'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { url } = body
+  const { url, bypassDomainCheck } = body
 
   if (!url) {
     return new Response(JSON.stringify({ error: 'URL is required' }), {
@@ -23,14 +23,53 @@ export async function POST(request: NextRequest) {
           controller.enqueue(encoder.encode(data))
         }
 
-        const result = await checkWebsiteLegitimacy(url, onProgress)
+        const result = await checkWebsiteLegitimacy(url, onProgress, { bypassDomainCheck })
+
+        // Handle different response types
+        if (result.status === 'not_in_db') {
+          // Domain not found in database - prompt user
+          const promptData = `data: ${JSON.stringify({
+            percent: 15,
+            prompt: {
+              message: 'Domain not found in our database.',
+              detail: 'Do you want to continue checking the public web?',
+              hostname: result.hostname
+            }
+          })}\n\n`
+          controller.enqueue(encoder.encode(promptData))
+          controller.close()
+          return
+        }
+
+        if (result.status === 'error') {
+          // Error response
+          const errorData = `data: ${JSON.stringify({
+            percent: 100,
+            result: {
+              riskLevel: 'WARNING',
+              message: result.message,
+              details: result.details
+            }
+          })}\n\n`
+          controller.enqueue(encoder.encode(errorData))
+          controller.close()
+          return
+        }
+
+        // Success response - format for frontend compatibility
+        const successResult = {
+          riskLevel: result.riskLevel,
+          message: result.message,
+          details: result.details,
+          screenshotPath: result.screenshotPath
+        }
 
         // Send Teams notification (non-blocking)
-        sendTeamsNotification(result, url).catch(err => {
+        sendTeamsNotification(successResult, url).catch(err => {
           console.error('Teams notification failed:', err)
         })
 
-        const finalData = `data: ${JSON.stringify({ percent: 100, result })}\n\n`
+        const finalData = `data: ${JSON.stringify({ percent: 100, result: successResult })}\n\n`
         controller.enqueue(encoder.encode(finalData))
         controller.close()
       } catch (error) {
