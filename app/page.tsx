@@ -36,8 +36,7 @@ export default function Home() {
   const [progressMessage, setProgressMessage] = useState('')
   const [prompt, setPrompt] = useState<Prompt | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent, bypassDomainCheck = false) => {
-    e.preventDefault()
+  const performCheck = async (bypassDomainCheck = false) => {
     setError('')
     setResult(null)
     setPrompt(null)
@@ -124,8 +123,13 @@ export default function Home() {
     }
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await performCheck()
+  }
+
   const handleContinueCheck = () => {
-    handleSubmit(new Event('submit'), true)
+    performCheck(true)
   }
 
   const handleCancel = () => {
@@ -148,7 +152,7 @@ export default function Home() {
         </div>
 
         <Card className="p-8 shadow-lg">
-          <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
                 htmlFor="url"
