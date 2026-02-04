@@ -1,5 +1,6 @@
 import { getDomainByDomain } from "@/lib/repo/domain"
 import { getTLD } from "@/lib/repo/tld"
+import { getBlacklistByDomain } from "@/lib/repo/blacklist"
 import { checkCloudflareRadar } from "@/lib/external/cloudflare"
 import { sha256 } from "./shared/hash"
 import { addHashToGlobalCache, addHashWithVerdict, getCacheEntry, updateScreenshotPath, updateVerdict, updateWhoisData } from "@/lib/repo/safebrowsing-cache"
@@ -106,6 +107,20 @@ export async function checkWebsiteLegitimacy(
       riskLevel: 'LEGITIMATE',
       message: '✓ Appears to be a Legitimate Website',
       details: ['✓ Website is available in our legitimate website list'],
+      hostname,
+    }
+  }
+
+  // === CHECK 2: Blacklist Check (AFTER legitimate domain check) ===
+  onProgress?.(20, 'Checking blacklist...')
+  const blacklistEntry = await getBlacklistByDomain(hostname)
+  if (blacklistEntry != null) {
+    onProgress?.(100, 'Complete')
+    return {
+      status: 'success',
+      riskLevel: 'WARNING',
+      message: '⚠️ WARNING - Known Phishing Website',
+      details: ['⚠️ This website is in our blacklist of known phishing sites'],
       hostname,
     }
   }

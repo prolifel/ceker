@@ -46,3 +46,5 @@ public/screenshots/
 *.csv
 
 **/node_modules/*
+**/*.xlsx
+**/*.txt
