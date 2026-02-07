@@ -86,20 +86,20 @@ export async function POST(request: NextRequest) {
           await createRequestLog({
             url,
             hostname,
-            message: result.message,
-            details: result.details,
+            message: result.messageKey,
+            details: result.details.map(d => d.key),
             scan_status: 'error',
             bypass_domain_check: bypassDomainCheck,
             ip_address: ipAddress,
             user_agent: userAgent,
           })
 
-          // Error response
+          // Error response - send translation keys
           const errorData = `data: ${JSON.stringify({
             percent: 100,
             result: {
               riskLevel: 'WARNING',
-              message: result.message,
+              messageKey: result.messageKey,
               details: result.details
             }
           })}\n\n`
@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
           url,
           hostname,
           risk_level: result.riskLevel,
-          message: result.message,
-          details: result.details,
+          message: result.messageKey,
+          details: result.details.map(d => d.key),
           screenshot_path: result.screenshotPath,
           scan_status: 'success',
           bypass_domain_check: bypassDomainCheck,
@@ -126,10 +126,11 @@ export async function POST(request: NextRequest) {
           user_agent: userAgent,
         })
 
-        // Success response - format for frontend compatibility
+        // Success response - format for frontend compatibility with translation keys
         const successResult = {
           riskLevel: result.riskLevel,
-          message: result.message,
+          messageKey: result.messageKey,
+          messageParams: result.messageParams,
           details: result.details,
           screenshotPath: result.screenshotPath
         }

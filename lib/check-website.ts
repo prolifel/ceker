@@ -9,13 +9,18 @@ import { saveScreenshot } from "./shared/storage"
 import { checkWhois } from "./external/whois"
 import { getRootDomain } from "@/lib/utils/domain"
 import { validateTLD } from "@/lib/utils/tld"
+import type { Translations } from "@/lib/i18n/translations"
 
 export type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
 
 export interface CheckResult {
   riskLevel: RiskLevel
-  message: string
-  details: string[]
+  messageKey: keyof Translations
+  messageParams?: Record<string, string | number>
+  details: Array<{
+    key: keyof Translations
+    params?: Record<string, string | number>
+  }>
   screenshotPath?: string
 }
 
@@ -26,8 +31,11 @@ export interface CheckResultNotInDB {
 
 export interface CheckResultError {
   status: 'error'
-  message: string
-  details: string[]
+  messageKey: keyof Translations
+  details: Array<{
+    key: keyof Translations
+    params?: Record<string, string | number>
+  }>
   // Logging data
   hostname: string
 }
@@ -35,8 +43,12 @@ export interface CheckResultError {
 export interface CheckResultSuccess {
   status: 'success'
   riskLevel: RiskLevel
-  message: string
-  details: string[]
+  messageKey: keyof Translations
+  messageParams?: Record<string, string | number>
+  details: Array<{
+    key: keyof Translations
+    params?: Record<string, string | number>
+  }>
   screenshotPath?: string
   // Logging data
   hostname: string
@@ -62,7 +74,7 @@ export async function checkWebsiteLegitimacy(
 ): Promise<CheckResultV2> {
   urlString = urlString.trim()
 
-  const details: string[] = []
+  const details: Array<{ key: keyof Translations; params?: Record<string, string | number> }> = []
 
   // Parse and validate URL
   let url: URL
@@ -75,8 +87,8 @@ export async function checkWebsiteLegitimacy(
   } catch {
     return {
       status: 'error',
-      message: 'Invalid URL Format',
-      details: ['The URL you entered is not in a valid format.'],
+      messageKey: 'invalidUrlFormat',
+      details: [{ key: 'invalidUrlFormatDetail' }],
       hostname: urlString,
     }
   }
@@ -91,8 +103,8 @@ export async function checkWebsiteLegitimacy(
   if (!tldValidation.valid) {
     return {
       status: 'error',
-      message: 'Invalid URL',
-      details: [tldValidation.reason || 'The domain extension is invalid.'],
+      messageKey: 'invalidUrlFormat',
+      details: [{ key: 'invalidDomainExtension' }],
       hostname,
     }
   }
@@ -105,8 +117,8 @@ export async function checkWebsiteLegitimacy(
     return {
       status: 'success',
       riskLevel: 'LEGITIMATE',
-      message: '✓ Appears to be a Legitimate Website',
-      details: ['✓ Website is available in our legitimate website list'],
+      messageKey: 'legitimate',
+      details: [{ key: 'websiteInLegitimateList' }],
       hostname,
     }
   }
@@ -119,8 +131,8 @@ export async function checkWebsiteLegitimacy(
     return {
       status: 'success',
       riskLevel: 'WARNING',
-      message: '⚠️ WARNING - Known Phishing Website',
-      details: ['⚠️ This website is in our blacklist of known phishing sites'],
+      messageKey: 'warningKnownPhishing',
+      details: [{ key: 'warningKnownPhishingDetail' }],
       hostname,
     }
   }
@@ -151,12 +163,12 @@ export async function checkWebsiteLegitimacy(
 
     cloudflareVerdict = cacheEntry?.verdict || 'UNKNOWN'
     if (cloudflareVerdict == 'MALICIOUS' || cloudflareVerdict == 'PHISHING') {
-      details.push(`⚠️ URL Scanner detected threats: ${cloudflareVerdict}.`)
+      details.push({ key: 'urlScannerDetectedThreats', params: { threats: cloudflareVerdict } })
     } else if (cloudflareVerdict == 'SAFE') {
       passedCloudflare = true
-      details.push(`✓ Passed URL Scanner check`)
+      details.push({ key: 'passedUrlScannerCheck' })
     } else {
-      details.push(`⚠️ URL Scanner not available`)
+      details.push({ key: 'urlScannerNotAvailable' })
     }
 
     onProgress?.(50, 'URL Scanner scan complete')
@@ -179,17 +191,20 @@ export async function checkWebsiteLegitimacy(
       }
 
       if (!cloudflareRadarResult.safe && !cloudflareRadarResult.unlisted) {
-        details.push(`⚠️ URL Scanner detected threats: ${cloudflareRadarResult.threatTypes?.join(', ')}. ${cloudflareRadarResult.details}`)
+        details.push({
+          key: 'urlScannerDetectedThreats',
+          params: { threats: cloudflareRadarResult.threatTypes?.join(', ') || verdict }
+        })
       } else if (cloudflareRadarResult.unlisted) {
-        details.push(`ℹ️ The URL is not registered in internal website.`)
+        details.push({ key: 'urlScannerUnlisted' })
       } else {
         passedCloudflare = true
-        details.push(`✓ Passed URL Scanner check`)
+        details.push({ key: 'passedUrlScannerCheck' })
       }
     } catch (error) {
       onProgress?.(50, 'URL Scanner scan complete')
       console.error('URL Scanner check failed:', error)
-      details.push(`ℹ️ URL Scanner check unavailable`)
+      details.push({ key: 'urlScannerUnavailable' })
       if (cacheEntry) {
         await updateVerdict(hash, verdict)
       } else {
@@ -208,19 +223,19 @@ export async function checkWebsiteLegitimacy(
 
   if (tld && suspiciousTLDs.some((suspicious) => tld === suspicious)) {
     unusualTLD = true
-    details.push('⚠️ Uses a free/suspicious top-level domain')
+    details.push({ key: 'usesFreeSuspiciousTld' })
   } else if (tld) {
     // Check if TLD is valid (in database)
     const tldExists = await getTLD(tld)
     if (tldExists) {
-      details.push('✓ Uses a standard domain extension')
+      details.push({ key: 'usesStandardDomainExtension' })
     } else {
       unusualTLD = true
-      details.push('⚠️ The domain extension is unknown')
+      details.push({ key: 'domainExtensionUnknown' })
     }
   } else {
     unusualTLD = true
-    details.push('⚠️ The domain extension is unknown')
+    details.push({ key: 'domainExtensionUnknown' })
   }
 
   // Check 2: Check for common phishing patterns
@@ -240,7 +255,7 @@ export async function checkWebsiteLegitimacy(
   )
 
   if (hostnameHasPhishingKeywords) {
-    details.push('⚠️ Domain contains common phishing keywords')
+    details.push({ key: 'domainContainsPhishingKeywords' })
   }
 
   // Check 3: HTTPS verification + Reachability check (merged)
@@ -265,19 +280,19 @@ export async function checkWebsiteLegitimacy(
 
   // Report combined HTTPS + reachability status
   if (isReachable && usesHttps) {
-    details.push('✓ Website is reachable, responding, and using secure connection')
+    details.push({ key: 'websiteReachableSecure' })
   } else if (isReachable && !usesHttps) {
-    details.push('⚠️ Website is reachable, but not using secure connection')
+    details.push({ key: 'websiteReachableNotSecure' })
   } else if (!isReachable && usesHttps) {
-    details.push('⚠️ Website cannot be reached')
+    details.push({ key: 'websiteNotReachable' })
   } else {
-    details.push('⚠️ Website could not be reached')
+    details.push({ key: 'websiteCouldNotBeReached' })
   }
 
   // Check 4: Subdomain check
   const subdomainHeavy = hostname.split('.').length > 3
   if (subdomainHeavy) {
-    details.push('⚠️ Domain structure seems unusual (subdomain heavy)')
+    details.push({ key: 'domainStructureUnusual' })
   }
 
   // Check 7: WHOIS domain age analysis
@@ -321,62 +336,62 @@ export async function checkWebsiteLegitimacy(
 
   if (domainAge !== null) {
     const daysOld = domainAge
-    details.push(`✓ Domain is ${daysOld} days old${domainSuffix}`)
+    details.push({ key: 'domainIsDaysOld', params: { days: daysOld, suffix: domainSuffix } })
   } else {
-    details.push(`ℹ️ Domain age information unavailable${domainSuffix}`)
+    details.push({ key: 'domainAgeUnavailable', params: { suffix: domainSuffix } })
   }
 
   // Check domain expiration
   if (whoisData.expires) {
     const daysUntilExpiry = Math.floor((whoisData.expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     if (daysUntilExpiry < 30) {
-      details.push(`⚠️ Domain expires soon (${daysUntilExpiry} days)`)
+      details.push({ key: 'domainExpiresSoon', params: { days: daysUntilExpiry } })
     }
   }
 
   // Display abuse contact information (informational only)
   if (whoisData.abuseContact) {
-    details.push(`ℹ️ Abuse contact: ${whoisData.abuseContact}`)
+    details.push({ key: 'abuseContact', params: { email: whoisData.abuseContact } })
   }
 
   // === 3-TIER CLASSIFICATION ===
   // Determine risk level based on collected flags
   // Priority order: domain age (highest) -> TLD/subdomain -> HTTPS -> Cloudflare (lowest)
   let riskLevel: RiskLevel = 'LEGITIMATE'
-  let message = '✓ Appears to be a Legitimate Website'
+  let messageKey: keyof Translations = 'legitimate'
 
   if (domainAge !== null && domainAge < 20) {
     // Very new domain (< 20 days) - Warning - HIGHEST PRIORITY
     riskLevel = 'WARNING'
-    message = '⚠️ High Risk - Very New Domain'
+    messageKey = 'warningVeryNewDomain'
   } else if (unusualTLD && subdomainHeavy) {
     // Unusual TLD + subdomain heavy - Warning
     riskLevel = 'WARNING'
-    message = '⚠️ High Risk - Suspicious Domain Structure'
+    messageKey = 'highRiskSubdomainHeavy'
   } else if (unusualTLD) {
     // Unusual TLD alone - Warning
     riskLevel = 'WARNING'
-    message = '⚠️ High Risk - Unusual Domain Extension'
+    messageKey = 'warningUnusualTld'
   } else if (!usesHttps) {
     // Not using HTTPS - Warning
     riskLevel = 'WARNING'
-    message = '⚠️ High Risk - Not Using Secure Connection'
+    messageKey = 'highRiskNoSecureConnection'
   } else if (domainAge !== null && domainAge < 90) {
     // New domain (< 90 days) - Suspicious
     riskLevel = 'SUSPICIOUS'
-    message = '⚠️ Suspicious - Recently Registered Domain'
+    messageKey = 'suspiciousNewDomain'
   } else if (subdomainHeavy) {
     // Subdomain heavy - Suspicious
     riskLevel = 'SUSPICIOUS'
-    message = '⚠️ Suspicious - Unusual Domain Structure'
+    messageKey = 'suspiciousDomainStructure'
   } else if (passedCloudflare) {
     // Passed Cloudflare Radar - Legitimate (only if above checks pass)
     riskLevel = 'LEGITIMATE'
-    message = '✓ Appears to be a Legitimate Website'
+    messageKey = 'legitimate'
   } else {
     // Default for established domains without Cloudflare check
     riskLevel = 'LEGITIMATE'
-    message = '✓ Appears to be a Legitimate Website'
+    messageKey = 'legitimate'
   }
 
   // Capture screenshot (with caching)
@@ -410,7 +425,7 @@ export async function checkWebsiteLegitimacy(
   return {
     status: 'success',
     riskLevel,
-    message,
+    messageKey,
     details,
     screenshotPath,
     hostname,

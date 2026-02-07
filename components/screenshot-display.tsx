@@ -3,15 +3,20 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 interface ScreenshotDisplayProps {
   screenshot: string
   alt?: string
 }
 
-export function ScreenshotDisplay({ screenshot, alt = 'Website screenshot' }: ScreenshotDisplayProps) {
+export function ScreenshotDisplay({ screenshot, alt }: ScreenshotDisplayProps) {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+
+  const defaultAlt = t('websiteScreenshot')
+  const finalAlt = alt || defaultAlt
 
   const isBase64 = !screenshot.startsWith('/')
   const imageSrc = isBase64 ? `data:image/png;base64,${screenshot}` : screenshot
@@ -30,14 +35,14 @@ export function ScreenshotDisplay({ screenshot, alt = 'Website screenshot' }: Sc
         )}
         <img
           src={imageSrc}
-          alt={alt}
+          alt={finalAlt}
           className={`w-full h-auto transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={() => setImageLoaded(true)}
         />
         {/* Hover overlay to indicate clickability */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
           <span className="text-white text-sm font-medium bg-black/50 px-3 py-1 rounded">
-            Click to zoom
+            {t('clickToZoom')}
           </span>
         </div>
       </div>
@@ -45,11 +50,11 @@ export function ScreenshotDisplay({ screenshot, alt = 'Website screenshot' }: Sc
       {/* Zoom modal dialog */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-6xl w-full p-0 bg-transparent border-none shadow-none">
-          <DialogTitle className="sr-only">Website Screenshot - Full Size</DialogTitle>
+          <DialogTitle className="sr-only">{t('websiteScreenshotFullSize')}</DialogTitle>
           <div className="relative w-full">
             <img
               src={imageSrc}
-              alt={alt}
+              alt={finalAlt}
               className="w-full h-auto rounded-lg"
             />
           </div>

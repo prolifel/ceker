@@ -1,18 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-const MESSAGES = [
-  'Checking...',
-  'Analyzing URL...',
-  'Scanning for threats...',
-  'Almost done...',
-  'Kindly wait for a second...',
-]
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 export function AnimatedCheckingText() {
+  const { t } = useTranslation()
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
+
+  const MESSAGES = [
+    t('checking'),
+    t('analyzingUrl'),
+    t('scanningForThreats'),
+    t('almostDone'),
+    t('kindlyWait'),
+  ]
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -25,7 +27,7 @@ export function AnimatedCheckingText() {
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [t])
 
   return (
     <span className="inline-block">

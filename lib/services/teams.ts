@@ -1,9 +1,12 @@
+import { translations } from '@/lib/i18n/translations'
+
 type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
 
 interface CheckResult {
   riskLevel: RiskLevel
-  message: string
-  details: string[]
+  messageKey: string
+  messageParams?: Record<string, string | number>
+  details: Array<{ key: string; params?: Record<string, string | number> }>
   screenshotPath?: string
 }
 
@@ -19,6 +22,21 @@ export async function sendTeamsNotification(result: CheckResult, url: string): P
 
   const statusColor = result.riskLevel === 'LEGITIMATE' ? 'Good' : result.riskLevel === 'WARNING' ? 'Attention' : 'Warning'
   const statusText = result.riskLevel
+
+  // Use English translations for Teams notifications
+  const en = translations.en
+  const message = en[result.messageKey as keyof typeof en] || result.messageKey
+  const detailsText = result.details
+    .map(d => {
+      const detailText = en[d.key as keyof typeof en] || d.key
+      return d.params
+        ? Object.entries(d.params).reduce(
+            (str, [key, value]) => str.replace(`{${key}}`, String(value)),
+            detailText
+          )
+        : detailText
+    })
+    .join('\n\n')
 
   const card = {
     type: 'message',
@@ -49,7 +67,7 @@ export async function sendTeamsNotification(result: CheckResult, url: string): P
             },
             {
               type: 'TextBlock',
-              text: `Verdict: ${result.message}`,
+              text: `Verdict: ${message}`,
               wrap: true
             },
             ...(result.screenshotPath ? [
@@ -67,7 +85,7 @@ export async function sendTeamsNotification(result: CheckResult, url: string): P
             },
             {
               type: 'TextBlock',
-              text: result.details.join('\n\n'),
+              text: detailsText,
               wrap: true
             }
           ],

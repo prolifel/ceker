@@ -1,3 +1,5 @@
+import type { Translations } from "@/lib/i18n/translations"
+
 /**
  * Validates if a string is a valid URL format
  */
@@ -10,7 +12,7 @@ export function isValidUrl(urlString: string): boolean {
  */
 export function getUrlError(urlString: string): string | null {
   if (!urlString || urlString.trim().length === 0) {
-    return 'Please enter a URL'
+    return 'errorEnterUrl'
   }
 
   const trimmed = urlString.trim()
@@ -23,7 +25,7 @@ export function getUrlError(urlString: string): string | null {
 
     // Check if hostname exists
     if (!url.hostname || url.hostname.length === 0) {
-      return 'Invalid URL: hostname is required'
+      return 'errorInvalidUrlHostname'
     }
 
     // Check for valid hostname (basic validation)
@@ -41,20 +43,20 @@ export function getUrlError(urlString: string): string | null {
     const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)
 
     if (!hasDot && !isIpAddress) {
-      return 'Invalid URL: please enter a valid website address (e.g., example.com)'
+      return 'errorInvalidUrlAddress'
     }
 
     // Check TLD is at least 2 characters for domains
     if (hasDot && !isIpAddress) {
       const tld = hostname.split('.').pop()
       if (tld && tld.length < 2) {
-        return 'Invalid URL: top-level domain must be at least 2 characters'
+        return 'errorInvalidUrlTld'
       }
     }
 
     return null
   } catch {
-    return 'Invalid URL format'
+    return 'errorInvalidUrlFormat'
   }
 }
 

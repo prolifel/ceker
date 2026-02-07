@@ -11,13 +11,15 @@ import { ScreenshotDisplay } from '@/components/screenshot-display'
 import { ProgressBar } from '@/components/progress-bar'
 import { AnimatedCheckingText } from '@/components/animated-checking-text'
 import { getUrlError, normalizeUrl } from '@/lib/utils/url'
+import { useTranslation } from '@/lib/i18n/use-translation'
 
 type RiskLevel = 'LEGITIMATE' | 'SUSPICIOUS' | 'WARNING'
 
 interface Result {
   riskLevel: RiskLevel
-  message: string
-  details: string[]
+  messageKey: string
+  messageParams?: Record<string, string | number>
+  details: Array<{ key: string; params?: Record<string, string | number> }>
   screenshotPath?: string
 }
 
@@ -28,6 +30,7 @@ interface Prompt {
 }
 
 export default function Home() {
+  const { t } = useTranslation()
   const [url, setUrl] = useState('')
   const [result, setResult] = useState<Result | null>(null)
   const [loading, setLoading] = useState(false)
@@ -46,13 +49,13 @@ export default function Home() {
     // Validate URL format
     const urlError = getUrlError(url)
     if (urlError) {
-      setError(urlError)
+      setError(t(urlError as any))
       return
     }
 
     setLoading(true)
     setProgress(0)
-    setProgressMessage('Starting scan...')
+    setProgressMessage(t('startingScan'))
 
     // Normalize URL (add https:// if missing)
     const normalizedUrl = normalizeUrl(url)
@@ -65,14 +68,14 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to check website')
+        throw new Error(t('failedToCheckWebsite'))
       }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
 
       if (!reader) {
-        throw new Error('No response body')
+        throw new Error(t('noResponseBody'))
       }
 
       while (true) {
@@ -90,7 +93,7 @@ export default function Home() {
             try {
               const data = JSON.parse(jsonStr)
               if (data.error) {
-                throw new Error(data.message || 'Scan failed')
+                throw new Error(data.message || t('scanFailed'))
               }
               if (data.prompt) {
                 // Show prompt to user
@@ -114,7 +117,7 @@ export default function Home() {
         }
       }
     } catch (err) {
-      setError('Failed to check website. Please try again.')
+      setError(t('failedToCheckWebsite'))
       console.error(err)
     } finally {
       setLoading(false)
@@ -144,10 +147,10 @@ export default function Home() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">
-            Ceker - Your Truly Link Checker
+            {t('title')}
           </h1>
           <p className="text-slate-600">
-            Verify if a website is legitimate or suspicious
+            {t('description')}
           </p>
         </div>
 
@@ -158,12 +161,12 @@ export default function Home() {
                 htmlFor="url"
                 className="block text-sm font-medium text-slate-700 mb-2"
               >
-                Enter Website URL
+                {t('enterUrl')}
               </label>
               <Input
                 id="url"
                 type="text"
-                placeholder="https://example.com"
+                placeholder={t('urlPlaceholder')}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={loading}
@@ -182,7 +185,7 @@ export default function Home() {
                   <AnimatedCheckingText />
                 </>
               ) : (
-                'Check Website'
+                t('checkButton')
               )}
             </Button>
 
@@ -209,10 +212,10 @@ export default function Home() {
                   <p className="text-sm text-yellow-700 mt-1">{prompt.detail}</p>
                   <div className="flex gap-2 mt-3">
                     <Button onClick={handleContinueCheck} className="bg-yellow-600 hover:bg-yellow-700">
-                      Yes, continue
+                      {t('yesContinue')}
                     </Button>
                     <Button variant="outline" onClick={handleCancel} className="border-yellow-300 text-yellow-700 hover:bg-yellow-50">
-                      No, cancel
+                      {t('noCancel')}
                     </Button>
                   </div>
                 </div>
@@ -222,8 +225,8 @@ export default function Home() {
 
           {result && result.screenshotPath && (
             <div className="mt-6 space-y-2">
-              <h4 className="text-sm font-medium text-slate-700">Website Screenshot</h4>
-              <ScreenshotDisplay screenshot={result.screenshotPath} alt="Website screenshot" />
+              <h4 className="text-sm font-medium text-slate-700">{t('websiteScreenshot')}</h4>
+              <ScreenshotDisplay screenshot={result.screenshotPath} alt={t('websiteScreenshot')} />
             </div>
           )}
 
@@ -255,7 +258,7 @@ export default function Home() {
                         : 'text-red-900'
                     }`}
                   >
-                    {result.message}
+                    {t(result.messageKey as any, result.messageParams)}
                   </h3>
                   <ul
                     className={`text-sm space-y-1 ${
@@ -267,7 +270,7 @@ export default function Home() {
                     }`}
                   >
                     {result.details.map((detail, idx) => (
-                      <li key={idx}>• {detail}</li>
+                      <li key={idx}>• {t(detail.key as any, detail.params)}</li>
                     ))}
                   </ul>
                 </div>
